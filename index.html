@@ -116,6 +116,13 @@
 
       <section class="set-group">
         <h3>Editor</h3>
+        <div class="set-row">
+          <span class="set-label" id="keys-label">Keys<small>In Vim, :w plays and :q stops</small></span>
+          <div class="segmented" role="radiogroup" aria-labelledby="keys-label">
+            <button type="button" role="radio" data-keys-choice="codemirror" data-testid="keys-normal">Normal</button>
+            <button type="button" role="radio" data-keys-choice="vim" data-testid="keys-vim">Vim</button>
+          </div>
+        </div>
         <label class="set-row toggle-row"><span class="set-label">Wrap long lines</span><input type="checkbox" class="toggle" data-setting="isLineWrappingEnabled"></label>
         <label class="set-row toggle-row"><span class="set-label">Suggestions while typing</span><input type="checkbox" class="toggle" data-setting="isAutoCompletionEnabled"></label>
         <label class="set-row toggle-row"><span class="set-label">Light up playing notes</span><input type="checkbox" class="toggle" data-setting="isPatternHighlightingEnabled"></label>
@@ -142,6 +149,7 @@
     <span class="status-error" id="error" data-testid="status-error" role="alert" hidden></span>
     <span class="status-right">
       <span class="status-loading" data-testid="status-loading" hidden><span class="spinner" aria-hidden="true"></span><span id="status-loading-text"></span></span>
+      <span class="status-vim" id="status-vim" data-testid="status-vim" hidden></span>
       <span class="status-cursor" id="status-cursor" data-testid="status-cursor">Ln 1, Col 1</span>
     </span>
   </footer>

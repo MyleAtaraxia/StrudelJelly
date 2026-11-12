@@ -250,6 +250,16 @@ button, input { font: inherit; color: inherit; }
 .status-loading { display: flex; align-items: center; gap: var(--sp-2); }
 .status-loading .spinner { width: 10px; height: 10px; border-width: 2px; }
 .status-cursor { min-width: 14ch; text-align: right; }
+.status-vim { padding: 0 var(--sp-2); border-radius: var(--r-pill); border: 2px solid var(--j-edge); background: var(--j-sky); color: #2B2430; letter-spacing: .06em; line-height: 14px; }
+.status-vim[data-mode="insert"] { background: var(--j-mint); }
+.status-vim[data-mode="visual"] { background: var(--j-lilac); }
+.status-vim[data-mode="replace"] { background: var(--j-pink); }
+/* Vim mode: block cursor and the : command line in jelly colours */
+#editor .cm-fat-cursor { background: var(--j-pink) !important; color: #2B2430 !important; border-radius: 2px; }
+#editor .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none !important; outline: 2px solid var(--j-pink) !important; color: transparent !important; }
+#editor .cm-panels { background: var(--j-panel); color: var(--j-ink); border-top: var(--j-line) solid var(--j-edge); }
+#editor .cm-vim-panel { font-family: "Cascadia Code", Consolas, monospace; padding: 2px var(--sp-3); }
+#editor .cm-vim-panel input { color: var(--j-ink); font-family: inherit; }
 
 /* ---------- sidebar ---------- */
 .sidebar { display: flex; flex-direction: column; }

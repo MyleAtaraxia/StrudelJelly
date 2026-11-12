@@ -4,6 +4,7 @@ import { createSketches } from './sketches.js';
 import { createViz, ZOOM_LEVELS, ROW_ZOOM_LEVELS } from './viz.js';
 import { initSounds } from './sounds/index.js';
 import { initDocs } from './docs/index.js';
+import { getCM } from '@replit/codemirror-vim';
 
 const $ = (id) => document.getElementById(id);
 const jelly = window.jelly;
@@ -90,6 +91,7 @@ const EDITOR_DEFAULTS = {
   vizRowZoom: 1,
   vizHeight: 170,
   hotReload: true,
+  keybindings: 'codemirror', // or 'vim'
 };
 let prefs;
 try {
@@ -385,6 +387,31 @@ fontSize.addEventListener('input', () => {
   editor.setFontSize(prefs.fontSize);
   savePrefs();
 });
+// keys: normal (CodeMirror) or Vim. In Vim mode the status bar shows the current mode.
+const vimBadge = $('status-vim');
+function renderVimMode() {
+  const vim = prefs.keybindings === 'vim' ? getCM(editor.editor)?.state.vim : null;
+  vimBadge.hidden = !vim;
+  if (!vim) return;
+  const mode = vim.insertMode ? 'insert' : vim.visualMode ? 'visual' : vim.mode === 'replace' ? 'replace' : 'normal';
+  if (vimBadge.dataset.mode !== mode) {
+    vimBadge.dataset.mode = mode;
+    vimBadge.textContent = mode.toUpperCase();
+  }
+}
+function setKeys(name) {
+  prefs.keybindings = name === 'vim' ? 'vim' : 'codemirror';
+  document.querySelectorAll('[data-keys-choice]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.keysChoice === prefs.keybindings)));
+  editor.reconfigureExtension('keybindings', prefs.keybindings);
+  savePrefs();
+  renderVimMode();
+}
+document.querySelectorAll('[data-keys-choice]').forEach((b) => b.addEventListener('click', () => setKeys(b.dataset.keysChoice)));
+setKeys(prefs.keybindings);
+// the mode changes on keys, clicks and selection changes; checking after each is cheap
+for (const t of ['keyup', 'mouseup', 'focusin', 'focusout']) editor.editor.dom.addEventListener(t, () => setTimeout(renderVimMode));
+onSelectionChange(editor, () => setTimeout(renderVimMode));
+
 document.querySelectorAll('[data-setting]').forEach((box) => {
   const key = box.dataset.setting;
   box.checked = !!prefs[key];
@@ -438,6 +465,7 @@ const docs = initDocs({
     { label: prefs.visualStrip ? 'Hide piano roll' : 'Show piano roll', run: () => setViz(!prefs.visualStrip) },
     { label: 'Piano roll: follow the playhead', run: () => viz.follow() },
     { label: prefs.hotReload ? 'Turn hot reload off' : 'Turn hot reload on', run: () => { hotSetting.checked = !prefs.hotReload; hotSetting.dispatchEvent(new Event('change')); } },
+    { label: prefs.keybindings === 'vim' ? 'Keys: normal (turn Vim off)' : 'Keys: Vim', run: () => setKeys(prefs.keybindings === 'vim' ? 'codemirror' : 'vim') },
     { label: 'Theme: light', run: () => setTheme('light') },
     { label: 'Theme: dark', run: () => setTheme('dark') },
     { label: 'Theme: follow system', run: () => setTheme('system') },

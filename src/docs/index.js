@@ -417,8 +417,7 @@ export function initDocs({ editor, container, showDocs, commands, sounds, sketch
       sigKey = '';
       updateSig();
     } else if (ev.key === 'Escape' && (!card.hidden || !sig.hidden)) {
-      ev.preventDefault();
-      ev.stopPropagation();
+      // closes the popups and still reaches the editor (Vim mode needs Esc to leave insert mode)
       hideCard();
       hideSig();
     }
