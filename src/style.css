@@ -72,8 +72,9 @@ button, input { font: inherit; color: inherit; }
 :focus-visible { outline: 3px solid var(--j-edge); outline-offset: 3px; }
 [hidden] { display: none !important; }
 
-/* titlebar = 12px top offset + 45px pills, so the pills sit 12px from the window top, the same as the gap between panels */
-.app { height: 100vh; display: grid; grid-template-rows: 57px minmax(0, 1fr) 24px; gap: var(--sp-3); padding: 0 var(--sp-4) var(--sp-2); }
+/* titlebar = 12px top offset + 45px pills, so the pills sit 12px from the window top, the same as the gap between panels
+   and the panels' distance from the bottom edge */
+.app { height: 100vh; display: grid; grid-template-rows: 57px minmax(0, 1fr); gap: var(--sp-3); padding: 0 var(--sp-4) var(--sp-3); }
 
 /* ---------- title bar ---------- */
 .titlebar {
@@ -218,7 +219,7 @@ button, input { font: inherit; color: inherit; }
   transition: background 160ms, border-color 160ms;
 }
 .sketch-name:hover { background: var(--j-ground); border-color: var(--j-edge); }
-.save-state { font-size: var(--fs-xs); font-weight: var(--fw-label); color: var(--j-soft); white-space: nowrap; }
+.save-state { flex-shrink: 0; font-size: var(--fs-xs); font-weight: var(--fw-label); color: var(--j-soft); white-space: nowrap; }
 .save-state[data-state="edited"] { color: var(--j-ink); }
 .save-state[data-state="error"] { color: #2B2430; background: var(--j-red); padding: 0 var(--sp-2); border-radius: var(--r-pill); border: var(--j-line) solid var(--j-edge); }
 
@@ -240,13 +241,15 @@ button, input { font: inherit; color: inherit; }
   background: var(--j-panel); font-size: var(--fs-sm); font-weight: var(--fw-label); box-shadow: 0 2px 0 var(--j-edge);
 }
 
-/* ---------- status bar ---------- */
-.statusbar { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; padding: 0 var(--sp-2); font-size: var(--fs-xs); font-weight: var(--fw-label); color: var(--j-soft); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* ---------- status (in the code panel's header) ---------- */
+.status-error, .status-right { font-size: var(--fs-xs); font-weight: var(--fw-label); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.status-right { color: var(--j-soft); }
 .status-error {
+  flex: 0 1 auto; line-height: 20px; border: 2px solid var(--j-edge);
   min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 0 var(--sp-2); border-radius: var(--r-pill);
   background: var(--j-red); color: #2B2430; user-select: text;
 }
-.status-right { margin-left: auto; display: flex; align-items: center; gap: var(--sp-4); flex-shrink: 0; }
+.status-right { display: flex; align-items: center; gap: var(--sp-3); flex-shrink: 0; padding-right: var(--sp-1); }
 .status-loading { display: flex; align-items: center; gap: var(--sp-2); }
 .status-loading .spinner { width: 10px; height: 10px; border-width: 2px; }
 .status-cursor { min-width: 14ch; text-align: right; }

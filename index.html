@@ -52,7 +52,14 @@
       <div class="panel-head">
         <button type="button" class="sketch-name" id="sketch-name" data-testid="sketch-name" title="Open sketches (double-click to rename)">&hellip;</button>
         <span class="save-state" id="save-state" data-testid="save-state" data-state="saved" title="Autosaves after a short pause. Ctrl+S saves now."></span>
+        <!-- status: the current error, sound loading, Vim mode and cursor position live in the code panel's header -->
+        <span class="status-error" id="error" data-testid="status-error" role="alert" hidden></span>
         <span class="head-spacer"></span>
+        <span class="status-right" data-testid="status-bar">
+          <span class="status-loading" data-testid="status-loading" hidden><span class="spinner" aria-hidden="true"></span><span id="status-loading-text"></span></span>
+          <span class="status-vim" id="status-vim" data-testid="status-vim" hidden></span>
+          <span class="status-cursor" id="status-cursor" data-testid="status-cursor">Ln 1, Col 1</span>
+        </span>
       </div>
       <div class="editor-body">
         <canvas id="test-canvas"></canvas>
@@ -142,14 +149,6 @@
     </aside>
   </main>
 
-  <footer class="statusbar" data-testid="status-bar">
-    <span class="status-error" id="error" data-testid="status-error" role="alert" hidden></span>
-    <span class="status-right">
-      <span class="status-loading" data-testid="status-loading" hidden><span class="spinner" aria-hidden="true"></span><span id="status-loading-text"></span></span>
-      <span class="status-vim" id="status-vim" data-testid="status-vim" hidden></span>
-      <span class="status-cursor" id="status-cursor" data-testid="status-cursor">Ln 1, Col 1</span>
-    </span>
-  </footer>
 
 </div>
 
