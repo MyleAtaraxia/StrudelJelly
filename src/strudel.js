@@ -4,8 +4,8 @@ import { aliasBank, registerSynthSounds, registerZZFXSounds, samples, getAudioCo
 import { StrudelMirror, themes, settings as themeSettings } from '@strudel/codemirror';
 import { transpiler } from '@strudel/transpiler';
 import { getDrawContext } from '@strudel/draw';
-import { EditorView } from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
+import { EditorView, Decoration, gutter, GutterMarker } from '@codemirror/view';
+import { EditorState, StateField, StateEffect, RangeSet } from '@codemirror/state';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import gm from '@strudel/soundfonts/gm.mjs';
@@ -109,6 +109,47 @@ async function prebake() {
 const docListeners = new Set();
 const docListenerExt = EditorView.updateListener.of((v) => v.docChanged && docListeners.forEach((fn) => fn(v)));
 let baseExtensions = null;
+
+// Gutter bars that colour each `$:` block like its notes in the piano roll.
+const setPatternMarksEffect = StateEffect.define();
+class PatternMark extends GutterMarker {
+  constructor(color, first, last) {
+    super();
+    this.color = color;
+    this.first = first;
+    this.last = last;
+  }
+  eq(o) {
+    return o.color === this.color && o.first === this.first && o.last === this.last;
+  }
+  toDOM() {
+    const el = document.createElement('div');
+    el.className = 'cm-pat-mark' + (this.first ? ' first' : '') + (this.last ? ' last' : '');
+    el.style.background = `var(${this.color})`;
+    return el;
+  }
+}
+const patternMarks = StateField.define({
+  create: () => RangeSet.empty,
+  update(marks, tr) {
+    marks = marks.map(tr.changes);
+    for (const e of tr.effects) if (e.is(setPatternMarksEffect)) marks = e.value;
+    return marks;
+  },
+});
+// The code behind a hovered piano-roll note.
+const setSourceHighlight = StateEffect.define();
+const sourceMark = Decoration.mark({ class: 'cm-src-hover' });
+const sourceHighlight = StateField.define({
+  create: () => Decoration.none,
+  update(decos, tr) {
+    decos = decos.map(tr.changes);
+    for (const e of tr.effects) if (e.is(setSourceHighlight)) decos = e.value;
+    return decos;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+const sourceExtensions = [patternMarks, gutter({ class: 'cm-pat-gutter', markers: (v) => v.state.field(patternMarks) }), sourceHighlight];
 const BASE_SETTINGS = {
   fontFamily: '"Cascadia Code", Consolas, monospace',
   isTooltipEnabled: true,
@@ -125,7 +166,7 @@ export function createEditor({ root, initialCode, onUpdateState, onEvalError, on
   const create = EditorState.create;
   EditorState.create = (config = {}) => {
     if (!baseExtensions) {
-      baseExtensions = [config.extensions ?? [], docListenerExt];
+      baseExtensions = [config.extensions ?? [], docListenerExt, sourceExtensions];
       config = { ...config, extensions: baseExtensions };
     }
     return create.call(EditorState, config);
@@ -149,9 +190,9 @@ export function createEditor({ root, initialCode, onUpdateState, onEvalError, on
       painters?.forEach((painter) => painter(editor.drawContext, time, haps, editor.drawTime));
       onFrame?.();
     },
-    afterEval: () => {
+    afterEval: (options) => {
       onEvalError?.(null);
-      onEval?.();
+      onEval?.(options?.code);
     },
     onEvalError: (err) => onEvalError?.(err),
   });
@@ -171,6 +212,35 @@ export function openDoc(editor, code, cached, settings) {
   editor.repl.setCode?.(code);
   editor.updateSettings({ ...BASE_SETTINGS, ...settings });
   editor.editor.dispatch({ scrollIntoView: true });
+}
+
+// Colour bars in the gutter: blocks = [{ fromLine, toLine, color: '--j-token' }]. Pass [] to clear.
+export function setPatternMarks(editor, blocks) {
+  const doc = editor.editor.state.doc;
+  const marks = [];
+  for (const b of blocks) {
+    const to = Math.min(b.toLine, doc.lines);
+    for (let n = b.fromLine; n <= to; n++) marks.push(new PatternMark(b.color, n === b.fromLine, n === to).range(doc.line(n).from));
+  }
+  editor.editor.dispatch({ effects: setPatternMarksEffect.of(RangeSet.of(marks, true)) });
+}
+
+// Light up source ranges ([{ start, end }]) in the editor; null clears.
+export function highlightSource(editor, ranges) {
+  const len = editor.editor.state.doc.length;
+  const decos = (ranges || [])
+    .filter((r) => r.start < r.end && r.end <= len)
+    .sort((a, b) => a.start - b.start)
+    .map((r) => sourceMark.range(r.start, r.end));
+  editor.editor.dispatch({ effects: setSourceHighlight.of(Decoration.set(decos, true)) });
+}
+
+// Put the cursor at a source position and show it.
+export function revealSource(editor, pos) {
+  const view = editor.editor;
+  const at = Math.min(pos, view.state.doc.length);
+  view.dispatch({ selection: { anchor: at }, scrollIntoView: true });
+  view.focus();
 }
 
 // Evaluate the code without starting playback (hot reload, and the piano roll while stopped). Code that does not

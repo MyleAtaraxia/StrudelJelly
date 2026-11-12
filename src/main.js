@@ -1,5 +1,5 @@
 import './style.css';
-import { createEditor, allBuiltinUrls, onDocChange, softEvaluate } from './strudel.js';
+import { createEditor, allBuiltinUrls, onDocChange, softEvaluate, setPatternMarks, highlightSource, revealSource } from './strudel.js';
 import { createSketches } from './sketches.js';
 import { createViz, ZOOM_LEVELS } from './viz.js';
 import { initSounds } from './sounds/index.js';
@@ -116,8 +116,11 @@ editor = createEditor({
   initialCode: '',
   settings: { ...prefs, theme: isDark() ? 'jellyDark' : 'jellyLight' },
   onEvalError: showError,
-  onEval: () => {
-    evalCode = editor.code;
+  onEval: (code = editor.code) => {
+    evalCode = code;
+    // tie notes to their code: colour bars per `$:` block (only while the text still matches what was evaluated)
+    const src = viz?.setSource(code);
+    if (src && editor.code === code) setPatternMarks(editor, src.labelled && src.blocks.length > 1 ? src.blocks : []);
     try { viz?.redraw(); } catch (e) { console.warn('viz', e); }
     renderTransport();
     renderTempo();
@@ -133,7 +136,12 @@ editor = createEditor({
     renderTransport();
   },
 });
-viz = createViz({ panel: $('main-col'), strip: $('viz'), canvas: $('viz-canvas'), scheduler: () => editor.repl.scheduler });
+viz = createViz({
+  panel: $('main-col'), strip: $('viz'), canvas: $('viz-canvas'), scheduler: () => editor.repl.scheduler,
+  // hovering a note lights up the code that made it, clicking jumps there (positions are only valid for unchanged code)
+  onHover: (ranges, code) => highlightSource(editor, ranges && editor.code === code ? ranges : null),
+  onPick: (loc, code) => loc && editor.code === code && revealSource(editor, loc.start),
+});
 viz.setVisible(prefs.visualStrip);
 renderTempo();
 renderTransport();
