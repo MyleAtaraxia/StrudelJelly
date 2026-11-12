@@ -59,7 +59,12 @@
   cursor: default; transition: background 100ms;
 }
 .sb-row[role="option"]:not(.is-sel):not(.is-hit):not(.is-failed):hover { background: color-mix(in srgb, var(--j-ink) 5%, transparent); }
-.sb-row.is-sel { background: var(--j-ground); box-shadow: inset 3px 0 0 var(--j-edge); }
+.sb-row[role="option"] { border: 2px solid transparent; border-radius: var(--r-md); }
+/* selected sound: a raised sticker, same as the open sketch in the Sketches pane */
+.sb-row.is-sel { z-index: 1; background: var(--j-lilac); border-color: var(--j-edge); box-shadow: 0 2px 0 var(--j-edge); color: #2B2430; }
+.sb-row.is-sel .sb-name { font-weight: var(--fw-label); }
+.sb-row.is-sel :is(.sb-code, .sb-count, .sb-len, .sb-badge, .sb-star) { color: #2B2430; opacity: .75; }
+.sb-row.is-sel .sb-star:hover { background: transparent; opacity: 1; }
 .sb-row.is-hit:not(.is-sel) { background: var(--sb-accent); }
 .sb-row.is-failed { background: var(--j-red); }
 :root[data-theme="dark"] .sb-row.is-hit,
