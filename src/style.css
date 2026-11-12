@@ -144,12 +144,30 @@ button, input { font: inherit; color: inherit; }
   font-family: Nunito, sans-serif;
 }
 #editor .cm-tooltip-autocomplete li[aria-selected] { background: var(--j-lilac) !important; color: #2B2430 !important; }
-.viz {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 110px; z-index: 4;
-  background: var(--j-ground); border-top: var(--j-line) solid var(--j-ink);
+/* code and piano roll are two capsules stacked in one column, with a drag handle between them */
+.main-col { min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.editor-panel { flex: 1; min-height: 120px; }
+.splitter { flex-shrink: 0; height: 14px; cursor: row-resize; position: relative; outline: none; }
+.splitter::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 5px; margin: -2.5px 0 0 -22px;
+  border-radius: 999px; background: var(--j-soft); opacity: .35; transition: opacity 120ms, background 120ms;
 }
-.viz canvas { display: block; width: 100%; height: 100%; }
-.editor-panel.has-viz #editor { bottom: 110px; }
+.splitter:hover::after, .splitter.dragging::after, .splitter:focus-visible::after { opacity: 1; background: var(--j-ink); }
+.main-col:not(.has-viz) .splitter { display: none; }
+.viz { flex-shrink: 0; height: var(--viz-h, 170px); display: flex; flex-direction: column; overflow: hidden; }
+.viz-head { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px 5px 16px; }
+.viz-title { font-family: Fredoka, sans-serif; font-weight: 500; font-size: 14px; }
+.zoom { display: flex; align-items: center; gap: 6px; }
+.zoom-btn {
+  width: 26px; height: 26px; display: grid; place-items: center; cursor: pointer; padding: 0;
+  border: var(--j-line) solid var(--j-ink); border-radius: 9px; background: var(--j-panel); box-shadow: 0 2px 0 var(--j-ink);
+  transition: transform 220ms var(--j-ease), box-shadow 220ms var(--j-ease);
+}
+.zoom-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; }
+.zoom-btn:active { transform: translateY(2px); box-shadow: none; transition-duration: 60ms; }
+.zoom-btn:disabled { opacity: .4; cursor: default; transform: none; }
+.zoom-val { min-width: 74px; text-align: center; font-size: 12px; font-weight: 800; color: var(--j-soft); }
+.viz canvas { display: block; flex: 1; min-height: 0; width: 100%; margin: 0 0 6px; }
 .viz-toggle {
   position: absolute; right: 12px; bottom: 12px; z-index: 6; width: 32px; height: 32px; display: grid; place-items: center; cursor: pointer;
   border: var(--j-line) solid var(--j-ink); border-radius: 11px; background: var(--j-sky); color: #2B2430; box-shadow: 0 2px 0 var(--j-ink);
@@ -158,7 +176,6 @@ button, input { font: inherit; color: inherit; }
 .viz-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; }
 .viz-toggle[aria-pressed="false"] { background: var(--j-oat); }
 .viz-toggle:active { transform: translateY(2px); box-shadow: none; transition-duration: 60ms; }
-.editor-panel.has-viz .error { bottom: 126px; }
 .error {
   position: absolute; left: 16px; right: 60px; bottom: 16px; z-index: 5;
   padding: 10px 16px; border-radius: 16px; border: var(--j-line) solid var(--j-ink);

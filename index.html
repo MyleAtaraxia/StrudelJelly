@@ -44,15 +44,28 @@
 
 
   <main class="workspace">
+    <div class="main-col" id="main-col">
     <section class="panel editor-panel" id="editor-panel" aria-label="Code">
       <canvas id="test-canvas"></canvas>
       <div id="editor"></div>
       <div class="error" id="error" role="alert" hidden></div>
-      <div class="viz" id="viz" data-testid="viz" hidden><canvas id="viz-canvas"></canvas></div>
-      <button type="button" class="viz-toggle" id="viz-toggle" data-testid="viz-toggle" aria-pressed="true" aria-label="Visual strip" title="Visual strip">
+      <button type="button" class="viz-toggle" id="viz-toggle" data-testid="viz-toggle" aria-pressed="true" aria-label="Piano roll" title="Piano roll">
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 8h5M7 13h6M12 17h7M14 8h6"></path></svg>
       </button>
     </section>
+    <div class="splitter" id="viz-splitter" data-testid="viz-splitter" role="separator" aria-orientation="horizontal" aria-label="Resize piano roll" tabindex="0" title="Drag to resize. Double-click to reset."></div>
+    <section class="panel viz" id="viz" data-testid="viz" aria-label="Piano roll" hidden>
+      <div class="viz-head">
+        <span class="viz-title">Piano roll</span>
+        <div class="zoom" role="group" aria-label="Zoom">
+          <button type="button" class="zoom-btn" id="zoom-in" data-testid="zoom-in" aria-label="Zoom in" title="Zoom in (scroll up on the roll)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"></path></svg></button>
+          <span class="zoom-val" id="zoom-val" data-testid="zoom-val"></span>
+          <button type="button" class="zoom-btn" id="zoom-out" data-testid="zoom-out" aria-label="Zoom out" title="Zoom out (scroll down on the roll)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 12h12"></path></svg></button>
+        </div>
+      </div>
+      <canvas id="viz-canvas"></canvas>
+    </section>
+    </div>
 
     <aside class="panel sidebar" id="sidebar">
       <div class="pane pane-sketches" id="pane-sketches" aria-label="Sketches" hidden></div>
@@ -83,7 +96,7 @@
         <label class="set-row toggle-row"><span class="set-label">Suggestions while typing</span><input type="checkbox" class="toggle" data-setting="isAutoCompletionEnabled"></label>
         <label class="set-row toggle-row"><span class="set-label">Light up playing notes</span><input type="checkbox" class="toggle" data-setting="isPatternHighlightingEnabled"></label>
         <label class="set-row toggle-row"><span class="set-label">Hot reload<small>Music updates as you type, no Ctrl+Enter needed</small></span><input type="checkbox" class="toggle" id="hot-setting" data-testid="hot-setting"></label>
-        <label class="set-row toggle-row"><span class="set-label">Visual strip</span><input type="checkbox" class="toggle" id="viz-setting" data-testid="viz-setting"></label>
+        <label class="set-row toggle-row"><span class="set-label">Piano roll</span><input type="checkbox" class="toggle" id="viz-setting" data-testid="viz-setting"></label>
         <label class="set-row toggle-row"><span class="set-label">Line numbers</span><input type="checkbox" class="toggle" data-setting="isLineNumbersDisplayed"></label>
       </section>
 

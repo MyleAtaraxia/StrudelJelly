@@ -1,7 +1,7 @@
 import './style.css';
 import { createEditor, allBuiltinUrls, onDocChange, softEvaluate } from './strudel.js';
 import { createSketches } from './sketches.js';
-import { createViz } from './viz.js';
+import { createViz, ZOOM_LEVELS } from './viz.js';
 import { initSounds } from './sounds/index.js';
 
 const $ = (id) => document.getElementById(id);
@@ -64,6 +64,8 @@ const EDITOR_DEFAULTS = {
   isPatternHighlightingEnabled: true,
   isLineNumbersDisplayed: true,
   visualStrip: true,
+  vizCycles: 4,
+  vizHeight: 170,
   hotReload: true,
 };
 let prefs;
@@ -131,7 +133,7 @@ editor = createEditor({
     renderTransport();
   },
 });
-viz = createViz({ panel: $('editor-panel'), strip: $('viz'), canvas: $('viz-canvas'), scheduler: () => editor.repl.scheduler });
+viz = createViz({ panel: $('main-col'), strip: $('viz'), canvas: $('viz-canvas'), scheduler: () => editor.repl.scheduler });
 viz.setVisible(prefs.visualStrip);
 renderTempo();
 renderTransport();
@@ -173,13 +175,73 @@ function setViz(on) {
   prefs.visualStrip = on;
   viz.setVisible(on);
   vizToggle.setAttribute('aria-pressed', String(on));
-  vizToggle.title = on ? 'Hide visual strip' : 'Show visual strip';
+  vizToggle.title = on ? 'Hide piano roll' : 'Show piano roll';
   vizSetting.checked = on;
   savePrefs();
 }
 setViz(prefs.visualStrip);
 vizToggle.addEventListener('click', () => setViz(!prefs.visualStrip));
 vizSetting.addEventListener('change', () => setViz(vizSetting.checked));
+
+// piano roll zoom: buttons, or the mouse wheel over the roll
+function setZoom(cycles) {
+  prefs.vizCycles = ZOOM_LEVELS.includes(cycles) ? cycles : 4;
+  viz.setCycles(prefs.vizCycles);
+  $('zoom-val').textContent = prefs.vizCycles === 1 ? '1 cycle' : `${prefs.vizCycles} cycles`;
+  $('zoom-in').disabled = prefs.vizCycles === ZOOM_LEVELS[0];
+  $('zoom-out').disabled = prefs.vizCycles === ZOOM_LEVELS.at(-1);
+  savePrefs();
+}
+const zoomBy = (step) => setZoom(ZOOM_LEVELS[Math.min(ZOOM_LEVELS.length - 1, Math.max(0, ZOOM_LEVELS.indexOf(prefs.vizCycles) + step))]);
+$('zoom-in').addEventListener('click', () => zoomBy(-1));
+$('zoom-out').addEventListener('click', () => zoomBy(1));
+let wheelAcc = 0;
+$('viz-canvas').addEventListener('wheel', (e) => {
+  e.preventDefault();
+  wheelAcc += e.deltaY;
+  if (Math.abs(wheelAcc) >= 60) { zoomBy(wheelAcc < 0 ? -1 : 1); wheelAcc = 0; }
+}, { passive: false });
+setZoom(prefs.vizCycles);
+
+// piano roll height: drag the handle between the two capsules (arrow keys work too, double-click resets)
+const mainCol = $('main-col');
+const splitter = $('viz-splitter');
+const MIN_VIZ = 90;
+function setVizHeight(px, save = true) {
+  const max = Math.max(MIN_VIZ, mainCol.clientHeight - 14 - 140); // leave the code at least 140px
+  prefs.vizHeight = Math.round(Math.min(max, Math.max(MIN_VIZ, px)));
+  mainCol.style.setProperty('--viz-h', prefs.vizHeight + 'px');
+  splitter.setAttribute('aria-valuenow', String(prefs.vizHeight));
+  if (save) savePrefs();
+}
+splitter.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  splitter.setPointerCapture(e.pointerId);
+  splitter.classList.add('dragging');
+  const startY = e.clientY;
+  const startH = $('viz').offsetHeight;
+  const move = (ev) => setVizHeight(startH + startY - ev.clientY, false);
+  const up = () => {
+    splitter.classList.remove('dragging');
+    splitter.removeEventListener('pointermove', move);
+    splitter.removeEventListener('pointerup', up);
+    splitter.removeEventListener('pointercancel', up);
+    savePrefs();
+  };
+  splitter.addEventListener('pointermove', move);
+  splitter.addEventListener('pointerup', up);
+  splitter.addEventListener('pointercancel', up);
+});
+splitter.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowUp') setVizHeight(prefs.vizHeight + 20);
+  else if (e.key === 'ArrowDown') setVizHeight(prefs.vizHeight - 20);
+  else return;
+  e.preventDefault();
+});
+splitter.addEventListener('dblclick', () => setVizHeight(EDITOR_DEFAULTS.vizHeight));
+setVizHeight(prefs.vizHeight, false);
+addEventListener('resize', () => setVizHeight(prefs.vizHeight, false));
 
 // ---------- sketches ----------
 const nameBtn = $('sketch-name');

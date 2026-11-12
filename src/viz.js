@@ -3,7 +3,7 @@ import { noteToMidi, freqToMidi } from '@strudel/core';
 // Pianoroll strip under the code. While playing it is driven by StrudelMirror's draw loop (frame() once per animation
 // frame). While stopped it shows the first cycles of the current pattern as a still picture, redrawn only when the
 // pattern, size or theme changes. Nothing runs while it is hidden.
-const CYCLES = 4; // cycles on screen
+export const ZOOM_LEVELS = [0.5, 1, 2, 4, 8, 16, 32]; // cycles on screen
 const PLAYHEAD = 0.25; // playhead position, 0..1 from the left
 const VARS = ['--j-pink', '--j-lilac', '--j-sky', '--j-ink', '--j-ground'];
 
@@ -24,6 +24,7 @@ const hash = (str) => [...String(str)].reduce((h, c) => (h * 31 + c.charCodeAt(0
 export function createViz({ panel, strip, canvas, scheduler }) {
   const ctx = canvas.getContext('2d');
   let visible = false;
+  let CYCLES = 4;
   let playing = false;
   let colors = {};
   let w = 0;
@@ -88,7 +89,7 @@ export function createViz({ panel, strip, canvas, scheduler }) {
     const lanes = [...new Set(haps.map((x) => laneOf(x.value)))].sort((a, b) =>
       typeof a === typeof b ? (typeof a === 'number' ? a - b : String(a).localeCompare(String(b))) : typeof a === 'number' ? 1 : -1,
     );
-    const laneH = Math.min(14 * r, (h - 8 * r) / Math.max(lanes.length, 1));
+    const laneH = Math.min(26 * r, (h - 8 * r) / Math.max(lanes.length, 1));
     const used = laneH * lanes.length;
     const top = (h - used) / 2;
     const palette = [colors['--j-pink'], colors['--j-lilac'], colors['--j-sky']];
@@ -130,6 +131,10 @@ export function createViz({ panel, strip, canvas, scheduler }) {
       playing = p;
       strip.classList.toggle('playing', p);
       if (visible && !p) still();
+    },
+    setCycles(n) {
+      CYCLES = n;
+      if (visible && !playing) still();
     },
     // the pattern changed (evaluated while stopped)
     redraw() {
