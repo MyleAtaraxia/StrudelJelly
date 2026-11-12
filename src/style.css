@@ -146,11 +146,10 @@ button, input { font: inherit; color: inherit; }
 .segmented button {
   height: 34px; min-width: 40px; padding: 0 var(--sp-3); display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1);
   border: 0; border-radius: 0; background: var(--j-panel); font-weight: var(--fw-label); font-size: var(--fs-sm); cursor: pointer;
-  transition: background 160ms, transform 60ms;
+  transition: background 160ms;
 }
 .segmented button + button { border-left: var(--j-line) solid var(--j-edge); }
 .segmented button:hover { background: var(--j-ground); }
-.segmented button:active { transform: translateY(2px); }
 .segmented svg { fill: none; }
 .segmented [aria-pressed="true"], .segmented [aria-checked="true"] { background: var(--j-sky); color: #2B2430; }
 
