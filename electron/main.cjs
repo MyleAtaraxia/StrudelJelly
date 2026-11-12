@@ -203,7 +203,7 @@ function createWindow() {
     title: 'Strudel Jelly',
     backgroundColor: bg(),
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: bg(), symbolColor: ink(), height: 52 },
+    titleBarOverlay: { color: bg(), symbolColor: ink(), height: 57 },
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs') },
   });
