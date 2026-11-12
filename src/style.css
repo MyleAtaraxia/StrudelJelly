@@ -157,7 +157,6 @@ button, input { font: inherit; color: inherit; }
 .panel {
   min-height: 0; background: var(--j-panel); overflow: hidden;
   border: var(--j-line) solid var(--j-edge); border-radius: var(--r-xl);
-  box-shadow: 0 4px 0 var(--j-edge);
 }
 
 /* Panel header, shared by the code panel, piano roll and every sidebar pane (sounds: put it above #pane-sounds):
