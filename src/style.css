@@ -91,7 +91,7 @@ button, input { font: inherit; color: inherit; }
 
 /* transport pill: play, tempo, cycle counter */
 .transport {
-  position: relative; display: flex; align-items: center; gap: var(--sp-3); padding: 3px;
+  position: relative; display: flex; align-items: center; gap: var(--sp-3); padding: 3px 3px 3px 4.5px; /* left gap = average of the gap above and below the button + shadow */
   border: var(--j-line) solid var(--j-edge); border-radius: var(--r-pill); background: var(--j-panel);
 }
 /* 45px pill: 32px button + 3px shadow room + padding and border */
