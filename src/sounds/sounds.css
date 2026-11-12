@@ -71,6 +71,8 @@
 :root[data-theme="dark"] .sb-row.is-failed { color: #2B2430; }
 
 .sb-head {
+  /* end the header's line 4px above the next row, so a selected first row doesn't touch it */
+  height: calc(var(--sb-row) - var(--sp-1));
   align-items: flex-end; padding-bottom: var(--sp-1); pointer-events: none;
   border-bottom: 1px solid var(--j-edge); border-radius: 0;
   font-family: Fredoka, sans-serif; font-weight: var(--fw-label); font-size: var(--fs-xs); letter-spacing: .06em; text-transform: uppercase; color: var(--j-soft);
