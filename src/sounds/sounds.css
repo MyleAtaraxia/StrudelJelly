@@ -19,11 +19,12 @@
   background: var(--j-panel);
 }
 .sb-tab {
-  flex: 1; min-width: 0; padding: var(--sp-1); border: 0; border-radius: 0; background: transparent;
-  color: var(--j-ink); font-weight: var(--fw-label); font-size: var(--fs-sm); line-height: 24px; cursor: pointer;
+  flex: 1; min-width: 0; height: 34px; padding: 0 var(--sp-1); border: 0; border-radius: 0; background: transparent;
+  color: var(--j-ink); font-weight: var(--fw-label); font-size: var(--fs-sm); cursor: pointer;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background 120ms;
 }
-.sb-tab + .sb-tab { border-left: 1px solid var(--j-edge); }
+/* same look as the shared .segmented control */
+.sb-tab + .sb-tab { border-left: var(--j-line) solid var(--j-edge); }
 .sb-tab:hover:not([aria-selected="true"]) { background: var(--j-ground); }
 .sb-tab[aria-selected="true"] { background: var(--j-sky); color: #2B2430; }
 .sb-tab:focus-visible { outline: 2px solid var(--j-edge); outline-offset: -4px; }
@@ -33,12 +34,13 @@
 /* ---------- toolbar and breadcrumb ---------- */
 .sb-toolbar { display: flex; gap: var(--sp-2); padding: 0 var(--sp-3); flex-shrink: 0; }
 .sb-search {
-  flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-2); height: 32px; padding: 0 var(--sp-3);
-  border-radius: var(--r-pill); border: var(--j-line) solid var(--j-edge); background: var(--j-field);
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-2); height: 34px; padding: 0 var(--sp-3);
+  border-radius: var(--r-pill); border: var(--j-line) solid var(--j-edge); background: var(--j-panel);
 }
 .sb-search svg { width: 16px; height: 16px; fill: none; stroke: var(--j-soft); stroke-width: 2.5; stroke-linecap: round; flex-shrink: 0; }
-.sb-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-weight: var(--fw-body); font-size: var(--fs-sm); }
-.sb-search:focus-within { box-shadow: 0 0 0 3px var(--sb-accent); }
+.sb-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--j-ink); font-weight: var(--fw-body); font-size: var(--fs-sm); }
+.sb-search input::placeholder { color: var(--j-soft); }
+.sb-search:focus-within { box-shadow: 0 0 0 3px var(--j-sky); }
 .sb-addbtn { flex-shrink: 0; padding: 0 var(--sp-3); }
 .sb-addbtn svg { width: 16px; height: 16px; }
 .icon-btn.sb-sm { width: 32px; height: 32px; border-radius: var(--r-sm); flex-shrink: 0; }
