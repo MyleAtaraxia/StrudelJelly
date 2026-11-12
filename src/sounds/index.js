@@ -30,7 +30,7 @@ const ICON = {
 const MARKUP = `
 <div class="sb" data-testid="sound-browser">
   <div class="sb-tabs" role="tablist" aria-label="Sound categories">
-    ${TABS.map(([id, name, c]) => `<button type="button" role="tab" class="sb-tab sb-tab-${c}" data-tab="${id}" data-testid="sound-tab-${id}" aria-selected="false" tabindex="-1">${name}</button>`).join('')}
+    ${TABS.map(([id, name, c]) => `<button type="button" role="tab" class="sb-tab" data-tab="${id}" data-testid="sound-tab-${id}" aria-selected="false" tabindex="-1">${name}</button>`).join('')}
   </div>
   <div class="sb-body" role="tabpanel" aria-label="Sounds">
     <div class="sb-toolbar">
@@ -62,6 +62,8 @@ const MARKUP = `
 
 export function initSounds({ editor, store, jelly, container, showSounds }) {
   container.innerHTML = MARKUP;
+  // bounded flex column: .sb-list needs a real height to scroll (a block parent left .sb at content height, so it never overflowed)
+  Object.assign(container.style, { display: 'flex', flexDirection: 'column', minHeight: '0', overflow: 'hidden' });
   const $ = (sel) => container.querySelector(sel);
   const root = $('.sb'), list = $('.sb-list'), spacer = $('.sb-spacer'), padwrap = $('.sb-padwrap'), padsEl = $('.sb-pads');
   const search = $('.sb-q'), addBtn = $('.sb-addbtn'), crumb = $('.sb-crumb'), none = $('.sb-none'), drop = $('.sb-drop');
@@ -274,7 +276,7 @@ export function initSounds({ editor, store, jelly, container, showSounds }) {
     const tail = [h('i', 'sb-spin')];
     if (el.dataset.len) tail.push(h('span', 'sb-len'));
     if (r.count) tail.push(h('span', 'sb-count', r.count));
-    tail.push(h('span', 'sb-badge', r.badge));
+    if (tab === 'instruments') tail.push(h('span', 'sb-badge', r.badge)); // other tabs already imply the type
     const add = h('button', 'sb-add');
     add.type = 'button';
     add.tabIndex = -1;

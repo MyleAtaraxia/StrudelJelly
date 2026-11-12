@@ -1,5 +1,5 @@
 import './style.css';
-import { createEditor, allBuiltinUrls, onDocChange, softEvaluate, setPatternMarks, highlightSource, revealSource } from './strudel.js';
+import { createEditor, allBuiltinUrls, onDocChange, onSelectionChange, cursorPos, softEvaluate, setPatternMarks, highlightSource, revealSource } from './strudel.js';
 import { createSketches } from './sketches.js';
 import { createViz, ZOOM_LEVELS } from './viz.js';
 import { initSounds } from './sounds/index.js';
@@ -29,6 +29,27 @@ $: note("<c2 eb2 g2 bb1>*2").s("sawtooth")
 $: n("0 2 4 <6 7>").scale("C4:minor").s("gm_epiano1")
   .room(.6).slow(2)
 `;
+
+// ---------- sound loading indicator (status bar) ----------
+// Count in-flight audio/sample downloads by wrapping fetch.
+const AUDIO_URL = /\.(wav|mp3|ogg|flac|m4a|aac|aif|aiff|opus)([?#]|$)|webaudiofontdata/i;
+let loadingCount = 0;
+function renderLoading() {
+  const el = document.querySelector('[data-testid=status-loading]');
+  el.hidden = loadingCount === 0;
+  $('status-loading-text').textContent = `Loading sounds… (${loadingCount})`;
+}
+const nativeFetch = window.fetch.bind(window);
+window.fetch = (input, init) => {
+  const url = typeof input === 'string' ? input : input?.url || String(input);
+  if (!AUDIO_URL.test(url)) return nativeFetch(input, init);
+  loadingCount++;
+  renderLoading();
+  return nativeFetch(input, init).finally(() => {
+    loadingCount--;
+    renderLoading();
+  });
+};
 
 // ---------- theme ----------
 const mq = matchMedia('(prefers-color-scheme: dark)');
@@ -100,12 +121,25 @@ function renderTempo() {
   const cps = editor?.repl.scheduler.cps;
   if (!cps) return;
   // 4 beats per cycle (see the tooltip in index.html)
-  $('tempo').textContent = `${num(cps * 240)} BPM · ${num(cps * 60)} cpm`;
+  $('tempo').innerHTML = `<b>${num(cps * 240)}</b> BPM · ${num(cps * 60)} cpm`;
 }
+// cycle counter: runs from the draw loop while playing, back to 0 when stopped
+let shownCycle = -1;
+function renderCycle() {
+  const c = started ? Math.max(0, Math.floor(editor.repl.scheduler.now())) : 0;
+  if (c === shownCycle) return;
+  shownCycle = c;
+  $('cycle').innerHTML = `cycle <b>${c}</b>`;
+}
+const renderCursor = () => {
+  const { line, col } = cursorPos(editor);
+  $('status-cursor').textContent = `Ln ${line}, Col ${col}`;
+};
 function showError(err) {
   evalError = err || null;
   errorBox.hidden = !err;
-  errorBox.textContent = err ? String(err.message || err) : '';
+  errorBox.textContent = err ? String(err.message || err).replace(/\s+/g, ' ').trim() : '';
+  errorBox.title = err ? String(err.message || err) : '';
   renderTransport();
 }
 const evaluate = () => editor.evaluate().catch(showError);
@@ -125,7 +159,10 @@ editor = createEditor({
     renderTransport();
     renderTempo();
   },
-  onFrame: () => viz.frame(),
+  onFrame: () => {
+    viz.frame();
+    renderCycle();
+  },
   onUpdateState: (s) => {
     if (!!s.started === started) return;
     started = !!s.started;
@@ -133,6 +170,7 @@ editor = createEditor({
     clearInterval(tempoTimer);
     tempoTimer = started ? setInterval(renderTempo, 400) : null;
     renderTempo();
+    renderCycle();
     renderTransport();
   },
 });
@@ -146,6 +184,8 @@ viz.setVisible(prefs.visualStrip);
 renderTempo();
 renderTransport();
 onDocChange(editor, renderTransport);
+onSelectionChange(editor, renderCursor);
+renderCursor();
 
 // ---------- hot reload ----------
 // Re-evaluate shortly after typing stops. While stopped this only refreshes the pattern (for the piano roll); it never
@@ -215,12 +255,17 @@ setZoom(prefs.vizCycles);
 const mainCol = $('main-col');
 const splitter = $('viz-splitter');
 const MIN_VIZ = 90;
+// prefs.vizHeight is the height the user asked for; a small window only shrinks what is shown, never the pref
 function setVizHeight(px, save = true) {
-  const max = Math.max(MIN_VIZ, mainCol.clientHeight - 14 - 140); // leave the code at least 140px
-  prefs.vizHeight = Math.round(Math.min(max, Math.max(MIN_VIZ, px)));
-  mainCol.style.setProperty('--viz-h', prefs.vizHeight + 'px');
-  splitter.setAttribute('aria-valuenow', String(prefs.vizHeight));
+  prefs.vizHeight = Math.round(Math.max(MIN_VIZ, px));
+  fitVizHeight();
   if (save) savePrefs();
+}
+function fitVizHeight() {
+  const max = Math.max(MIN_VIZ, mainCol.clientHeight - 12 - 140); // leave the code at least 140px
+  const h = Math.min(max, prefs.vizHeight);
+  mainCol.style.setProperty('--viz-h', h + 'px');
+  splitter.setAttribute('aria-valuenow', String(h));
 }
 splitter.addEventListener('pointerdown', (e) => {
   if (e.button !== 0) return;
@@ -229,7 +274,8 @@ splitter.addEventListener('pointerdown', (e) => {
   splitter.classList.add('dragging');
   const startY = e.clientY;
   const startH = $('viz').offsetHeight;
-  const move = (ev) => setVizHeight(startH + startY - ev.clientY, false);
+  const maxH = Math.max(MIN_VIZ, mainCol.clientHeight - 12 - 140);
+  const move = (ev) => setVizHeight(Math.min(maxH, startH + startY - ev.clientY), false);
   const up = () => {
     splitter.classList.remove('dragging');
     splitter.removeEventListener('pointermove', move);
@@ -242,14 +288,15 @@ splitter.addEventListener('pointerdown', (e) => {
   splitter.addEventListener('pointercancel', up);
 });
 splitter.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowUp') setVizHeight(prefs.vizHeight + 20);
-  else if (e.key === 'ArrowDown') setVizHeight(prefs.vizHeight - 20);
+  const cur = $('viz').offsetHeight;
+  if (e.key === 'ArrowUp') setVizHeight(Math.min(mainCol.clientHeight - 12 - 140, cur + 20));
+  else if (e.key === 'ArrowDown') setVizHeight(cur - 20);
   else return;
   e.preventDefault();
 });
 splitter.addEventListener('dblclick', () => setVizHeight(EDITOR_DEFAULTS.vizHeight));
 setVizHeight(prefs.vizHeight, false);
-addEventListener('resize', () => setVizHeight(prefs.vizHeight, false));
+new ResizeObserver(fitVizHeight).observe(mainCol);
 
 // ---------- sketches ----------
 const nameBtn = $('sketch-name');
@@ -263,6 +310,7 @@ const sketches = createSketches({
     clearTimeout(hotTimer);
     if (started) editor.stop();
     showError(null);
+    renderCursor();
     evalCode = editor.code;
     if (loaded) refreshPattern();
     renderTransport();
@@ -326,7 +374,7 @@ function showPane(name) {
   workspace.classList.toggle('no-sidebar', !name);
   document.querySelectorAll('[data-pane]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pane === name)));
   $('pane-sketches').hidden = name !== 'sketches';
-  $('pane-sounds').hidden = name !== 'sounds';
+  $('pane-sounds-wrap').hidden = name !== 'sounds';
   $('pane-settings').hidden = name !== 'settings';
   if (name === 'settings') refreshOffline();
   if (name === 'sketches') sketches.refresh();

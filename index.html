@@ -13,10 +13,6 @@
       <span class="logo-dot" aria-hidden="true"></span>
       <span class="brand-name">strudel <b>jelly</b></span>
     </div>
-    <div class="sketch-title">
-      <button type="button" class="sketch-name" id="sketch-name" data-testid="sketch-name" title="Open sketches (double-click to rename)">&hellip;</button>
-      <span class="save-state" id="save-state" data-testid="save-state" data-state="saved" title="Autosaves after a short pause. Ctrl+S saves now."></span>
-    </div>
     <div class="transport">
       <button type="button" class="btn btn-pink play-btn" id="play" data-testid="play" disabled title="Loading sounds">
         <span class="play-icon" aria-hidden="true">
@@ -26,41 +22,51 @@
         </span>
         <span id="play-label">Play</span>
       </button>
+      <div class="readout">
+        <span class="tempo" id="tempo" data-testid="tempo" title="Tempo, assuming 4 beats per cycle (BPM = cycles per minute x 4)"></span>
+        <span class="cycle" id="cycle" data-testid="cycle" title="Cycles played since Play">cycle <b>0</b></span>
+      </div>
       <span class="update-hint" id="update-hint" data-testid="update-hint" hidden>Ctrl+Enter to update</span>
-      <span class="tempo" id="tempo" data-testid="tempo" title="Tempo, assuming 4 beats per cycle (BPM = cycles per minute x 4)"></span>
     </div>
     <div class="titlebar-right">
-      <button type="button" class="icon-btn btn-mint" data-pane="sketches" data-testid="pane-sketches" aria-label="Sketches" title="Sketches" aria-pressed="false">
-        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6zM14 3v5h5M9 13h7M9 17h5"></path></svg>
-      </button>
-      <button type="button" class="icon-btn btn-sky" data-pane="sounds" data-testid="pane-sounds" aria-label="Sounds" title="Sounds" aria-pressed="true">
-        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM19 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"></path></svg>
-      </button>
-      <button type="button" class="icon-btn btn-lilac" data-pane="settings" data-testid="pane-settings" aria-label="Settings" title="Settings" aria-pressed="false">
-        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M16 5v4M8 15v4"></path></svg>
-      </button>
+      <div class="segmented" role="group" aria-label="Side panel">
+        <button type="button" data-pane="sketches" data-testid="pane-sketches" aria-label="Sketches" title="Sketches" aria-pressed="false">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6zM14 3v5h5M9 13h7M9 17h5"></path></svg>
+        </button>
+        <button type="button" data-pane="sounds" data-testid="pane-sounds" aria-label="Sounds" title="Sounds" aria-pressed="true">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM19 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"></path></svg>
+        </button>
+        <button type="button" data-pane="settings" data-testid="pane-settings" aria-label="Settings" title="Settings" aria-pressed="false">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M16 5v4M8 15v4"></path></svg>
+        </button>
+      </div>
     </div>
   </header>
-
 
   <main class="workspace">
     <div class="main-col" id="main-col">
     <section class="panel editor-panel" id="editor-panel" aria-label="Code">
-      <canvas id="test-canvas"></canvas>
-      <div id="editor"></div>
-      <div class="error" id="error" role="alert" hidden></div>
-      <button type="button" class="viz-toggle" id="viz-toggle" data-testid="viz-toggle" aria-pressed="true" aria-label="Piano roll" title="Piano roll">
-        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 8h5M7 13h6M12 17h7M14 8h6"></path></svg>
-      </button>
+      <div class="panel-head">
+        <button type="button" class="sketch-name" id="sketch-name" data-testid="sketch-name" title="Open sketches (double-click to rename)">&hellip;</button>
+        <span class="save-state" id="save-state" data-testid="save-state" data-state="saved" title="Autosaves after a short pause. Ctrl+S saves now."></span>
+        <span class="head-spacer"></span>
+        <button type="button" class="head-btn sq btn-sky viz-toggle" id="viz-toggle" data-testid="viz-toggle" aria-pressed="true" aria-label="Piano roll" title="Piano roll">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 8h5M7 13h6M12 17h7M14 8h6"></path></svg>
+        </button>
+      </div>
+      <div class="editor-body">
+        <canvas id="test-canvas"></canvas>
+        <div id="editor"></div>
+      </div>
     </section>
     <div class="splitter" id="viz-splitter" data-testid="viz-splitter" role="separator" aria-orientation="horizontal" aria-label="Resize piano roll" tabindex="0" title="Drag to resize. Double-click to reset."></div>
     <section class="panel viz" id="viz" data-testid="viz" aria-label="Piano roll" hidden>
-      <div class="viz-head">
-        <span class="viz-title">Piano roll</span>
-        <div class="zoom" role="group" aria-label="Zoom">
-          <button type="button" class="zoom-btn" id="zoom-in" data-testid="zoom-in" aria-label="Zoom in" title="Zoom in (scroll up on the roll)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"></path></svg></button>
+      <div class="panel-head">
+        <span class="panel-title">Piano roll</span>
+        <div class="head-group" role="group" aria-label="Zoom">
+          <button type="button" class="head-btn sq zoom-btn" id="zoom-in" data-testid="zoom-in" aria-label="Zoom in" title="Zoom in (scroll up on the roll)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"></path></svg></button>
           <span class="zoom-val" id="zoom-val" data-testid="zoom-val"></span>
-          <button type="button" class="zoom-btn" id="zoom-out" data-testid="zoom-out" aria-label="Zoom out" title="Zoom out (scroll down on the roll)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 12h12"></path></svg></button>
+          <button type="button" class="head-btn sq zoom-btn" id="zoom-out" data-testid="zoom-out" aria-label="Zoom out" title="Zoom out (scroll down on the roll)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 12h12"></path></svg></button>
         </div>
       </div>
       <canvas id="viz-canvas"></canvas>
@@ -69,10 +75,14 @@
 
     <aside class="panel sidebar" id="sidebar">
       <div class="pane pane-sketches" id="pane-sketches" aria-label="Sketches" hidden></div>
-      <div class="pane pane-sounds" id="pane-sounds" aria-label="Sounds"></div>
+      <div class="pane" id="pane-sounds-wrap" aria-label="Sounds">
+        <div class="panel-head"><span class="panel-title">Sounds</span></div>
+        <div class="pane-body" id="pane-sounds"></div>
+      </div>
 
       <div class="pane pane-settings" id="pane-settings" aria-label="Settings" hidden>
-      <h2>Settings</h2>
+      <div class="panel-head"><span class="panel-title">Settings</span></div>
+      <div class="pane-body pane-scroll">
 
       <section class="set-group">
         <h3>Look</h3>
@@ -110,8 +120,17 @@
         </div>
       </section>
       </div>
+      </div>
     </aside>
   </main>
+
+  <footer class="statusbar" data-testid="status-bar">
+    <span class="status-error" id="error" data-testid="status-error" role="alert" hidden></span>
+    <span class="status-right">
+      <span class="status-loading" data-testid="status-loading" hidden><span class="spinner" aria-hidden="true"></span><span id="status-loading-text"></span></span>
+      <span class="status-cursor" id="status-cursor" data-testid="status-cursor">Ln 1, Col 1</span>
+    </span>
+  </footer>
 
 </div>
 

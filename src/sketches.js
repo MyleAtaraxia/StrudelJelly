@@ -171,11 +171,12 @@ export function createSketches({ editor, store, jelly, container, defaultCode, s
 
   // ---------- list UI ----------
   container.innerHTML = `
-    <div class="sk-head"><h2>Sketches</h2></div>
-    <div class="sk-tools">
-      <button type="button" class="btn btn-mint btn-sm" data-act="new" data-testid="sketch-new" title="New sketch (Ctrl+N)">${svg('new')}<span>New</span></button>
-      <button type="button" class="btn btn-sky btn-sm" data-act="dup" data-testid="sketch-duplicate" title="Duplicate this sketch">${svg('copy')}<span>Duplicate</span></button>
-      <button type="button" class="btn btn-cream btn-sm" data-act="folder" data-testid="sketch-folder" title="Open the sketches folder">${svg('folder')}<span>Open folder</span></button>
+    <div class="panel-head">
+      <span class="panel-title">Sketches</span>
+      <span class="head-spacer"></span>
+      <button type="button" class="head-btn btn-mint" data-act="new" data-testid="sketch-new" title="New sketch (Ctrl+N)">${svg('new')}<span>New</span></button>
+      <button type="button" class="head-btn sq" data-act="dup" data-testid="sketch-duplicate" aria-label="Duplicate" title="Duplicate this sketch">${svg('copy')}</button>
+      <button type="button" class="head-btn sq" data-act="folder" data-testid="sketch-folder" aria-label="Open folder" title="Open the sketches folder">${svg('folder')}</button>
     </div>
     <div class="sk-list" role="list" data-testid="sketch-list"></div>`;
   const listEl = container.querySelector('.sk-list');

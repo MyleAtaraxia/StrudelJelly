@@ -11,7 +11,7 @@ export const ZOOM_LEVELS = [0.5, 1, 2, 4, 8, 16, 32]; // cycles on screen
 export const BLOCK_COLORS = ['--j-pink', '--j-sky', '--j-mint', '--j-lilac', '--j-butter', '--j-oat'];
 const PLAYHEAD = 0.25; // playhead position while playing, 0..1 across the note area
 const LABEL_W = 58; // css px
-const VARS = [...BLOCK_COLORS, '--j-ink', '--j-ground', '--j-panel', '--j-soft'];
+const VARS = [...BLOCK_COLORS, '--j-ink', '--j-edge', '--j-ground', '--j-panel', '--j-soft'];
 const LABEL_RE = /^\s*([A-Za-z_$][\w$]*)\s*:(?!:)/; // `$:`, `bass:`, `_$:` ...
 
 // lane key of a note: a midi number for pitched notes, '_' + sound name otherwise
@@ -179,7 +179,7 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick }) 
     // notes
     rects = [];
     ctx.lineWidth = 1.5 * r;
-    ctx.strokeStyle = colors['--j-ink'];
+    ctx.strokeStyle = colors['--j-edge'];
     for (const hap of haps) {
       const i = rowIndex.get(hap._b + '|' + hap._lane);
       const x = lw + ((hap.whole.begin - from) / CYCLES) * W;
@@ -231,7 +231,7 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick }) 
 
     // dividers between blocks
     ctx.globalAlpha = 0.25;
-    ctx.strokeStyle = colors['--j-ink'];
+    ctx.strokeStyle = colors['--j-edge'];
     for (const i of gaps) {
       const gy = rowY[i] - gapH / 2;
       ctx.beginPath();
@@ -243,7 +243,7 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick }) 
 
     // playhead
     ctx.globalAlpha = headAlpha;
-    ctx.strokeStyle = colors['--j-ink'];
+    ctx.strokeStyle = colors['--j-edge'];
     ctx.lineWidth = 2.5 * r;
     ctx.beginPath();
     ctx.moveTo(lw + headAt * W, 0);

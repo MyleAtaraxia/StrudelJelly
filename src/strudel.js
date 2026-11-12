@@ -107,7 +107,11 @@ async function prebake() {
 // One update listener feeds every onDocChange subscriber. It is part of the base extensions, so it survives
 // openDoc() swapping in a fresh EditorState for another sketch.
 const docListeners = new Set();
-const docListenerExt = EditorView.updateListener.of((v) => v.docChanged && docListeners.forEach((fn) => fn(v)));
+const selListeners = new Set();
+const docListenerExt = EditorView.updateListener.of((v) => {
+  if (v.docChanged) docListeners.forEach((fn) => fn(v));
+  if (v.docChanged || v.selectionSet) selListeners.forEach((fn) => fn(v));
+});
 let baseExtensions = null;
 
 // Gutter bars that colour each `$:` block like its notes in the piano roll.
@@ -260,6 +264,18 @@ export async function softEvaluate(editor) {
 // call fn on every document change (typing and programmatic replacement alike)
 export function onDocChange(editor, fn) {
   docListeners.add(fn);
+}
+
+// call fn when the cursor or selection moves (and on edits). A sketch switch replaces the state without an update: read cursorPos() then
+export function onSelectionChange(editor, fn) {
+  selListeners.add(fn);
+}
+
+export function cursorPos(editor) {
+  const st = editor.editor.state;
+  const head = st.selection.main.head;
+  const line = st.doc.lineAt(head);
+  return { line: line.number, col: head - line.from + 1 };
 }
 
 // replace the whole document as a normal (undoable) edit, e.g. when the file changed on disk
