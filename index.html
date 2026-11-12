@@ -25,52 +25,15 @@
       <span class="pill" id="state">Waking up</span>
     </div>
     <div class="titlebar-right">
-      <button type="button" class="icon-btn btn-sky" id="toggle-sounds" aria-label="Show or hide sounds" aria-pressed="true">
+      <button type="button" class="icon-btn btn-sky" data-pane="sounds" aria-label="Sounds" aria-pressed="true">
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM19 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"></path></svg>
       </button>
-      <button type="button" class="icon-btn btn-lilac" id="settings-btn" popovertarget="settings" aria-label="Settings">
+      <button type="button" class="icon-btn btn-lilac" data-pane="settings" aria-label="Settings" aria-pressed="false">
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M16 5v4M8 15v4"></path></svg>
       </button>
     </div>
   </header>
 
-  <div class="settings" id="settings" popover>
-    <h2>Settings</h2>
-
-    <section class="set-group">
-      <h3>Look</h3>
-      <div class="set-row">
-        <span class="set-label" id="theme-label">Theme</span>
-        <div class="segmented" role="radiogroup" aria-labelledby="theme-label">
-          <button type="button" role="radio" data-theme-choice="system">System</button>
-          <button type="button" role="radio" data-theme-choice="light">Light</button>
-          <button type="button" role="radio" data-theme-choice="dark">Dark</button>
-        </div>
-      </div>
-      <label class="set-row">
-        <span class="set-label">Code size <b id="font-size-val"></b></span>
-        <input type="range" id="font-size" min="12" max="30" step="1">
-      </label>
-    </section>
-
-    <section class="set-group">
-      <h3>Editor</h3>
-      <label class="set-row toggle-row"><span class="set-label">Wrap long lines</span><input type="checkbox" class="toggle" data-setting="isLineWrappingEnabled"></label>
-      <label class="set-row toggle-row"><span class="set-label">Suggestions while typing</span><input type="checkbox" class="toggle" data-setting="isAutoCompletionEnabled"></label>
-      <label class="set-row toggle-row"><span class="set-label">Light up playing notes</span><input type="checkbox" class="toggle" data-setting="isPatternHighlightingEnabled"></label>
-      <label class="set-row toggle-row"><span class="set-label">Line numbers</span><input type="checkbox" class="toggle" data-setting="isLineNumbersDisplayed"></label>
-    </section>
-
-    <section class="set-group">
-      <h3>Offline sounds</h3>
-      <p class="set-note" id="offline-label">Checking...</p>
-      <div class="track" id="track" role="progressbar" aria-label="Built-in sounds saved offline" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div>
-      <div class="row">
-        <button type="button" class="btn btn-butter btn-sm" id="offline">Save all sounds offline</button>
-        <button type="button" class="btn btn-cream btn-sm" id="open-cache">Open cache folder</button>
-      </div>
-    </section>
-  </div>
 
   <main class="workspace">
     <section class="panel editor-panel" id="editor-panel" aria-label="Code">
@@ -79,7 +42,8 @@
       <div class="error" id="error" role="alert" hidden></div>
     </section>
 
-    <aside class="panel sounds" id="sounds" aria-label="Sounds">
+    <aside class="panel sidebar" id="sidebar">
+      <div class="pane pane-sounds" id="pane-sounds" aria-label="Sounds">
       <div class="tabs" role="tablist">
         <button type="button" role="tab" class="tab tab-pink" data-tab="mine" aria-selected="true">Mine</button>
         <button type="button" role="tab" class="tab tab-butter" data-tab="drums" aria-selected="false">Drums</button>
@@ -108,6 +72,45 @@
 
         <p class="hint" id="hint"></p>
         <div class="chips" id="chips"></div>
+      </div>
+      </div>
+
+      <div class="pane pane-settings" id="pane-settings" aria-label="Settings" hidden>
+      <h2>Settings</h2>
+
+      <section class="set-group">
+        <h3>Look</h3>
+        <div class="set-row">
+          <span class="set-label" id="theme-label">Theme</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="theme-label">
+            <button type="button" role="radio" data-theme-choice="system">System</button>
+            <button type="button" role="radio" data-theme-choice="light">Light</button>
+            <button type="button" role="radio" data-theme-choice="dark">Dark</button>
+          </div>
+        </div>
+        <label class="set-row">
+          <span class="set-label">Code size <b id="font-size-val"></b></span>
+          <input type="range" id="font-size" min="12" max="30" step="1">
+        </label>
+      </section>
+
+      <section class="set-group">
+        <h3>Editor</h3>
+        <label class="set-row toggle-row"><span class="set-label">Wrap long lines</span><input type="checkbox" class="toggle" data-setting="isLineWrappingEnabled"></label>
+        <label class="set-row toggle-row"><span class="set-label">Suggestions while typing</span><input type="checkbox" class="toggle" data-setting="isAutoCompletionEnabled"></label>
+        <label class="set-row toggle-row"><span class="set-label">Light up playing notes</span><input type="checkbox" class="toggle" data-setting="isPatternHighlightingEnabled"></label>
+        <label class="set-row toggle-row"><span class="set-label">Line numbers</span><input type="checkbox" class="toggle" data-setting="isLineNumbersDisplayed"></label>
+      </section>
+
+      <section class="set-group">
+        <h3>Offline sounds</h3>
+        <p class="set-note" id="offline-label">Checking...</p>
+        <div class="track" id="track" role="progressbar" aria-label="Built-in sounds saved offline" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div>
+        <div class="row">
+          <button type="button" class="btn btn-butter btn-sm" id="offline">Save all sounds offline</button>
+          <button type="button" class="btn btn-cream btn-sm" id="open-cache">Open cache folder</button>
+        </div>
+      </section>
       </div>
     </aside>
   </main>

@@ -124,10 +124,19 @@ $('stop').addEventListener('click', () => editor.stop());
 
 // ---------- sounds sidebar ----------
 const workspace = document.querySelector('.workspace');
-$('toggle-sounds').addEventListener('click', (e) => {
-  const on = workspace.classList.toggle('no-sounds');
-  e.currentTarget.setAttribute('aria-pressed', String(!on));
-});
+let pane = null;
+function showPane(name) {
+  pane = name;
+  workspace.classList.toggle('no-sidebar', !name);
+  document.querySelectorAll('[data-pane]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pane === name)));
+  $('pane-sounds').hidden = name !== 'sounds';
+  $('pane-settings').hidden = name !== 'settings';
+  if (name === 'settings') refreshOffline();
+  store.set('jelly-pane', name || '');
+}
+document.querySelectorAll('[data-pane]').forEach((b) =>
+  b.addEventListener('click', () => showPane(pane === b.dataset.pane ? null : b.dataset.pane)),
+);
 
 const TAB_COLORS = {
   mine: ['--j-pink', '--j-butter', '--j-mint', '--j-sky', '--j-lilac'],
@@ -274,7 +283,7 @@ const showMineTab = () => tab !== 'mine' && document.querySelector('.tab[data-ta
 addEventListener('dragenter', (e) => {
   if (!e.dataTransfer?.types.includes('Files')) return;
   if (dragDepth++ === 0) {
-    workspace.classList.remove('no-sounds');
+    if (pane !== 'sounds') showPane('sounds');
     showMineTab();
     dropzone.classList.add('over');
   }
@@ -340,10 +349,11 @@ jelly.onPrefetch((p) => {
   }
 });
 $('open-cache').addEventListener('click', () => jelly.openCache());
-$('settings').addEventListener('toggle', (e) => e.newState === 'open' && refreshOffline());
+showPane(store.get('jelly-pane', 'sounds') || null);
 
 editor.prebaked.then(() => {
   pill.textContent = 'Ready';
   urls = allBuiltinUrls();
   renderSounds();
+  if (pane === 'settings') refreshOffline();
 });
