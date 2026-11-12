@@ -26,7 +26,7 @@ const SOUNDFONT_URL = 'https://felixroos.github.io/webaudiofontdata/sound';
 
 function jellyTheme(dark) {
   const c = dark
-    ? { fg: '#F6EADB', soft: '#CDBFC4', fn: '#AC9BD8', str: '#9FC792', num: '#DCC381', prop: '#D9A0AA', kw: '#93B5DB', line: '#3A313F', sel: '#4A3F52' }
+    ? { fg: '#FFF4E6', soft: '#C4B6BC', fn: '#D3C4F3', str: '#C3E5B5', num: '#FBE4A4', prop: '#F6B8C1', kw: '#B9D6F5', line: '#2C2330', sel: '#463A4C' }
     : { fg: '#5C4037', soft: '#9A7E72', fn: '#7556B8', str: '#3F7A2E', num: '#A8651A', prop: '#B4475A', kw: '#2F6BA8', line: '#FBE4E6', sel: '#F6D3D9' };
   const settings = {
     background: 'transparent', lineBackground: 'transparent', foreground: c.fg, caret: c.fg,

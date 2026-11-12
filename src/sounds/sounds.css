@@ -15,7 +15,7 @@
 /* ---------- pill tabs ---------- */
 .sb-tabs {
   display: flex; flex-shrink: 0; margin: var(--sp-3) var(--sp-3) var(--sp-2); overflow: hidden;
-  border: var(--j-line) solid var(--j-edge); border-radius: var(--r-pill);
+  border: var(--j-frame-w) solid var(--j-frame); border-radius: var(--r-pill);
   background: var(--j-panel);
 }
 .sb-tab {
@@ -24,7 +24,7 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background 120ms;
 }
 /* same look as the shared .segmented control */
-.sb-tab + .sb-tab { border-left: var(--j-line) solid var(--j-edge); }
+.sb-tab + .sb-tab { border-left: var(--j-frame-w) solid var(--j-frame); }
 .sb-tab:hover:not([aria-selected="true"]) { background: var(--j-ground); }
 .sb-tab[aria-selected="true"] { background: var(--j-sky); color: #2B2430; }
 .sb-tab:focus-visible { outline: 2px solid var(--j-edge); outline-offset: -4px; }
@@ -35,7 +35,7 @@
 .sb-toolbar { display: flex; gap: var(--sp-2); padding: 0 var(--sp-3); flex-shrink: 0; }
 .sb-search {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-2); height: 34px; padding: 0 var(--sp-3);
-  border-radius: var(--r-pill); border: var(--j-line) solid var(--j-edge); background: var(--j-panel);
+  border-radius: var(--r-pill); border: var(--j-frame-w) solid var(--j-frame); background: var(--j-panel);
 }
 .sb-search svg { width: 16px; height: 16px; fill: none; stroke: var(--j-soft); stroke-width: 2.5; stroke-linecap: round; flex-shrink: 0; }
 .sb-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--j-ink); font-weight: var(--fw-body); font-size: var(--fs-sm); }
@@ -74,7 +74,7 @@
   /* end the header's line 4px above the next row, so a selected first row doesn't touch it */
   height: calc(var(--sb-row) - var(--sp-1));
   align-items: flex-end; padding-bottom: var(--sp-1); pointer-events: none;
-  border-bottom: 1px solid var(--j-edge); border-radius: 0;
+  border-bottom: 1px solid var(--j-frame); border-radius: 0;
   font-family: Fredoka, sans-serif; font-weight: var(--fw-label); font-size: var(--fs-xs); letter-spacing: .06em; text-transform: uppercase; color: var(--j-soft);
 }
 .sb-head-n { font-family: Nunito, sans-serif; font-variant-numeric: tabular-nums; }
@@ -108,7 +108,7 @@
 .sb-row:hover .sb-add, .sb-row.is-sel .sb-add, .sb-add:focus-visible { opacity: 1; }
 .sb-add:active { transform: translateY(1px); }
 .sb-rename {
-  flex: 1; min-width: 0; height: 24px; padding: 0 var(--sp-2); border: 2px solid var(--j-edge); border-radius: var(--r-sm);
+  flex: 1; min-width: 0; height: 24px; padding: 0 var(--sp-2); border: 2px solid var(--j-frame); border-radius: var(--r-sm);
   background: var(--j-field); color: var(--j-ink); font-weight: var(--fw-body); font-size: var(--fs-sm); outline: 0;
 }
 
@@ -149,7 +149,7 @@
 
 /* ---------- status line ---------- */
 .sb-status {
-  flex-shrink: 0; min-height: 24px; padding: var(--sp-1) var(--sp-3); border-top: 1px solid var(--j-edge);
+  flex-shrink: 0; min-height: 24px; padding: var(--sp-1) var(--sp-3); border-top: 1px solid var(--j-frame);
   font-size: var(--fs-xs); color: var(--j-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
@@ -169,7 +169,7 @@
 /* ---------- menu ---------- */
 .sb-menu {
   position: absolute; z-index: 30; min-width: 190px; padding: var(--sp-1); display: flex; flex-direction: column; gap: 2px;
-  background: var(--j-panel); border: var(--j-line) solid var(--j-edge); border-radius: var(--r-md); box-shadow: 0 3px 0 var(--j-edge);
+  background: var(--j-panel); border: var(--j-frame-w) solid var(--j-frame); border-radius: var(--r-md); box-shadow: 0 3px 0 var(--j-frame);
 }
 .sb-menu-title { padding: var(--sp-1) var(--sp-2); font-size: var(--fs-xs); color: var(--j-soft); }
 .sb-menuitem {

@@ -191,8 +191,8 @@ function serveApp() {
 
 // ---------- window ----------
 
-const bg = () => (nativeTheme.shouldUseDarkColors ? '#2B2430' : '#FBE4E6');
-const ink = () => (nativeTheme.shouldUseDarkColors ? '#F6EADB' : '#5C4037');
+const bg = () => (nativeTheme.shouldUseDarkColors ? '#141015' : '#FBE4E6');
+const ink = () => (nativeTheme.shouldUseDarkColors ? '#FFF4E6' : '#5C4037');
 
 function createWindow() {
   win = new BrowserWindow({

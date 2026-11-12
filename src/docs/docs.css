@@ -8,7 +8,7 @@
 .dc-toolbar { flex-shrink: 0; padding: var(--sp-3) var(--sp-3) var(--sp-2); }
 .dc-search {
   display: flex; align-items: center; gap: var(--sp-2); height: 34px; padding: 0 var(--sp-3);
-  border-radius: var(--r-pill); border: var(--j-line) solid var(--j-edge); background: var(--j-panel);
+  border-radius: var(--r-pill); border: var(--j-frame-w) solid var(--j-frame); background: var(--j-panel);
 }
 .dc-search svg { width: 16px; height: 16px; fill: none; stroke: var(--j-soft); stroke-width: 2.5; stroke-linecap: round; flex-shrink: 0; }
 .dc-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--j-ink); font-weight: var(--fw-body); font-size: var(--fs-sm); }
@@ -19,7 +19,7 @@
 .dc-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 var(--sp-2) var(--sp-2); }
 .dc-head {
   display: flex; align-items: flex-end; gap: var(--sp-2); height: 28px; margin: 0 var(--sp-1) var(--sp-1); padding-bottom: var(--sp-1);
-  border-bottom: 1px solid var(--j-edge);
+  border-bottom: 1px solid var(--j-frame);
   font-family: Fredoka, sans-serif; font-weight: var(--fw-label); font-size: var(--fs-xs); letter-spacing: .06em; text-transform: uppercase; color: var(--j-soft);
 }
 .dc-head > span:first-child { flex: 1; }
@@ -61,7 +61,7 @@
 .dc-params dt { display: flex; flex-direction: column; font-weight: var(--fw-label); }
 .dc-params dd { margin: 0; color: var(--j-ink); }
 .dc-type { font-size: var(--fs-xs); font-weight: var(--fw-body); color: var(--j-soft); }
-.dc-ex { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-2); border: var(--j-line) solid var(--j-edge); border-radius: var(--r-md); background: var(--j-field); }
+.dc-ex { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-2); border: var(--j-frame-w) solid var(--j-frame); border-radius: var(--r-md); background: var(--j-field); }
 .dc-code { margin: 0; font-family: "Cascadia Code", Consolas, monospace; font-size: var(--fs-sm); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--j-ink); user-select: text; }
 .dc-ex-btns { display: flex; gap: var(--sp-2); }
 .dc-play.is-playing { background: var(--j-butter); }
@@ -78,7 +78,7 @@
 /* hover card and signature tip: floating stickers over the editor */
 .dc-card, .dc-sigtip {
   position: fixed; z-index: 60; background: var(--j-panel); color: var(--j-ink);
-  border: var(--j-line) solid var(--j-edge); border-radius: var(--r-md); box-shadow: 0 3px 0 var(--j-edge);
+  border: var(--j-frame-w) solid var(--j-frame); border-radius: var(--r-md); box-shadow: 0 3px 0 var(--j-frame);
 }
 .dc-card { width: min(420px, calc(100vw - 16px)); max-height: min(360px, 60vh); overflow-y: auto; padding: var(--sp-3); font-size: var(--fs-sm); user-select: text; }
 .dc-card .dc-sig { font-size: var(--fs-sm); }
@@ -95,12 +95,12 @@
 .pal-backdrop { position: fixed; inset: 0; z-index: 70; display: flex; justify-content: center; align-items: flex-start; padding-top: 10vh; background: color-mix(in srgb, var(--j-ground) 55%, transparent); }
 .pal {
   width: min(820px, calc(100vw - 32px)); height: min(480px, 75vh); display: flex; flex-direction: column; overflow: hidden;
-  background: var(--j-panel); border: var(--j-line) solid var(--j-edge); border-radius: var(--r-xl); box-shadow: 0 4px 0 var(--j-edge);
+  background: var(--j-panel); border: var(--j-frame-w) solid var(--j-frame); border-radius: var(--r-xl); box-shadow: 0 4px 0 var(--j-frame);
 }
 .pal-search { flex-shrink: 0; margin: var(--sp-3); height: 40px; }
 .pal-search input { font-size: var(--fs-md); }
-.pal-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); border-top: var(--j-line) solid var(--j-edge); }
-.pal-list { min-height: 0; overflow-y: auto; padding: var(--sp-2); border-right: var(--j-line) solid var(--j-edge); }
+.pal-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); border-top: var(--j-frame-w) solid var(--j-frame); }
+.pal-list { min-height: 0; overflow-y: auto; padding: var(--sp-2); border-right: var(--j-frame-w) solid var(--j-frame); }
 .pal-row {
   display: flex; align-items: center; gap: var(--sp-2); height: 32px; padding: 0 var(--sp-2);
   border: 2px solid transparent; border-radius: var(--r-md); cursor: pointer; white-space: nowrap; overflow: hidden;
@@ -118,5 +118,5 @@ code.pal-label { font-family: "Cascadia Code", Consolas, monospace; font-weight:
 .pal-preview { min-height: 0; overflow-y: auto; padding: var(--sp-3); font-size: var(--fs-sm); user-select: text; }
 .pal-about b { font-size: var(--fs-md); }
 .pal-about p { margin: var(--sp-1) 0 0; color: var(--j-soft); }
-.pal-foot { flex-shrink: 0; display: flex; gap: var(--sp-4); padding: var(--sp-2) var(--sp-4); border-top: var(--j-line) solid var(--j-edge); font-size: var(--fs-xs); color: var(--j-soft); }
+.pal-foot { flex-shrink: 0; display: flex; gap: var(--sp-4); padding: var(--sp-2) var(--sp-4); border-top: var(--j-frame-w) solid var(--j-frame); font-size: var(--fs-xs); color: var(--j-soft); }
 .pal-foot kbd { font-family: inherit; font-weight: var(--fw-label); padding: 0 4px; border-radius: 4px; border: 1.5px solid var(--j-soft); }
