@@ -179,7 +179,10 @@ viz = createViz({
   // hovering a note lights up the code that made it, clicking jumps there (positions are only valid for unchanged code)
   onHover: (ranges, code) => highlightSource(editor, ranges && editor.code === code ? ranges : null),
   onPick: (loc, code) => loc && editor.code === code && revealSource(editor, loc.start),
+  // panning the roll stops it following the playhead; the Follow button brings it back
+  onFollowChange: (following) => ($('viz-follow').hidden = following),
 });
+$('viz-follow').addEventListener('click', () => viz.follow());
 viz.setVisible(prefs.visualStrip);
 renderTempo();
 renderTransport();
@@ -231,7 +234,7 @@ setViz(prefs.visualStrip);
 vizToggle.addEventListener('click', () => setViz(!prefs.visualStrip));
 vizSetting.addEventListener('change', () => setViz(vizSetting.checked));
 
-// piano roll zoom: buttons, or the mouse wheel over the roll
+// piano roll zoom: buttons, or Ctrl+wheel (or a touchpad pinch) over the roll; plain wheel scrolls and pans it (viz.js)
 function setZoom(cycles) {
   prefs.vizCycles = ZOOM_LEVELS.includes(cycles) ? cycles : 4;
   viz.setCycles(prefs.vizCycles);
@@ -245,6 +248,7 @@ $('zoom-in').addEventListener('click', () => zoomBy(-1));
 $('zoom-out').addEventListener('click', () => zoomBy(1));
 let wheelAcc = 0;
 $('viz-canvas').addEventListener('wheel', (e) => {
+  if (!e.ctrlKey) return;
   e.preventDefault();
   wheelAcc += e.deltaY;
   if (Math.abs(wheelAcc) >= 60) { zoomBy(wheelAcc < 0 ? -1 : 1); wheelAcc = 0; }

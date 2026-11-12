@@ -1,8 +1,12 @@
 import { noteToMidi, freqToMidi, midi2note } from '@strudel/core';
 
 // Piano roll panel. While playing it is driven by StrudelMirror's draw loop (frame() once per animation frame).
-// While stopped it shows the first cycles of the current pattern as a still picture, redrawn only when the pattern,
-// size or theme changes. Nothing runs while it is hidden.
+// While stopped it shows the pattern from cycle 0 as a still picture, redrawn only when the pattern, size, theme or
+// view changes. Nothing runs while it is hidden.
+//
+// The view follows the playhead until the user pans it (drag, or Shift+wheel); follow() snaps back. The plain wheel
+// scrolls the rows when they don't all fit. Rows are collected from everything seen since the pattern last changed,
+// so they don't come and go as notes scroll in and out of view.
 //
 // Every note is traced back to the code that made it: Strudel records the source positions of each event
 // (hap.context.locations), so each note is assigned to its `$:` block (one colour per block, matching the bars in the
@@ -11,6 +15,9 @@ export const ZOOM_LEVELS = [0.5, 1, 2, 4, 8, 16, 32]; // cycles on screen
 export const BLOCK_COLORS = ['--j-pink', '--j-sky', '--j-mint', '--j-lilac', '--j-butter', '--j-oat'];
 const PLAYHEAD = 0.25; // playhead position while playing, 0..1 across the note area
 const LABEL_W = 58; // css px
+const RULER_H = 18; // css px, cycle numbers along the top
+const MIN_LANE = 16; // css px; below this the rows scroll instead of shrinking
+const MAX_LANE = 26; // css px
 const VARS = [...BLOCK_COLORS, '--j-ink', '--j-edge', '--j-ground', '--j-panel', '--j-soft'];
 const LABEL_RE = /^\s*([A-Za-z_$][\w$]*)\s*:(?!:)/; // `$:`, `bass:`, `_$:` ...
 
@@ -52,7 +59,7 @@ export function patternBlocks(code) {
   return { blocks, labelled, lineStarts: starts };
 }
 
-export function createViz({ panel, strip, canvas, scheduler, onHover, onPick }) {
+export function createViz({ panel, strip, canvas, scheduler, onHover, onPick, onFollowChange }) {
   const ctx = canvas.getContext('2d');
   const tip = document.createElement('div');
   tip.className = 'viz-tip';
@@ -72,6 +79,15 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick }) 
   let mouse = null; // last pointer position over the canvas, css px
   let hovered = null;
   let hoverKey = '';
+  let follow = true; // keep the playhead in view (playing) or show from cycle 0 (stopped)
+  let viewFrom = 0; // left edge in cycles while not following
+  let shownFrom = 0; // left edge of the last drawn frame
+  let scrollY = 0; // css px the rows are scrolled down by
+  let maxScroll = 0;
+  let seen = new Map(); // rows seen since the pattern changed: key -> { b, lane }
+  let rowsStale = true;
+  let drag = null;
+  let dragged = false; // the last press was a drag, not a click on a note
 
   // size the backing store to the element; also run before every draw, since ResizeObserver callbacks are skipped
   // while the window is not on screen
@@ -119,52 +135,95 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick }) 
     return lo + 1;
   }
 
+  // ---------- view ----------
+  function setFollow(on) {
+    if (follow === on) return;
+    follow = on;
+    onFollowChange?.(on);
+  }
+  // stop following and keep the current view where it is
+  function detach() {
+    if (!follow) return;
+    viewFrom = shownFrom;
+    setFollow(false);
+  }
+  const noteWidthCss = () => Math.max(1, canvas.clientWidth - LABEL_W);
+  function panBy(px) {
+    detach();
+    viewFrom = Math.max(0, viewFrom + (px / noteWidthCss()) * CYCLES);
+    if (!playing) still();
+  }
+  function scrollBy(px) {
+    const next = Math.min(maxScroll, Math.max(0, Math.min(scrollY, maxScroll) + px));
+    if (next === scrollY) return;
+    scrollY = next;
+    if (!playing) still();
+  }
+
   // ---------- drawing ----------
-  // stopped: cycles 0..CYCLES from the left of the note area, playhead resting at the start
+  // stopped: from cycle 0 (or wherever the user panned to), playhead resting at cycle 0
   function still() {
-    draw(0, -Infinity, 0, 0.35);
+    draw(follow ? 0 : viewFrom, -Infinity, 0, 0.35);
   }
   function frame() {
     if (!visible || !playing) return;
     const now = scheduler().now();
-    draw(now - CYCLES * PLAYHEAD, now, PLAYHEAD, 1);
+    // the playhead starts at the left edge and moves right until it reaches PLAYHEAD, then the notes scroll under it
+    draw(follow ? Math.max(0, now - CYCLES * PLAYHEAD) : viewFrom, now, now, 1);
   }
 
-  function draw(from, now, headAt, headAlpha) {
+  const query = (a, b) => {
+    try {
+      return (scheduler().pattern?.queryArc(a, b) ?? []).filter((x) => x.whole);
+    } catch (e) {
+      console.warn('viz', e);
+      return [];
+    }
+  };
+  function addRows(haps) {
+    for (const hap of haps) {
+      hap._b = blockOf(hap);
+      hap._lane = laneOf(hap.value);
+      const key = hap._b + '|' + hap._lane;
+      if (!seen.has(key)) seen.set(key, { b: hap._b, lane: hap._lane });
+    }
+  }
+  // rows: blocks in code order from the top; inside a block high notes on top, then unpitched sounds by name
+  function sortedRows() {
+    const byLane = (x, y) =>
+      typeof x === typeof y ? (typeof x === 'number' ? y - x : String(x).localeCompare(String(y))) : typeof x === 'number' ? -1 : 1;
+    const byBlock = (x, y) => (x === -1 ? 1 : y === -1 ? -1 : x - y);
+    return [...seen.values()].sort((p, q) => (p.b !== q.b ? byBlock(p.b, q.b) : byLane(p.lane, q.lane)));
+  }
+
+  function draw(from, now, head, headAlpha) {
     measure();
     if (w < 4 || h < 16) return; // not laid out yet; the ResizeObserver draws again once it is
     const r = window.devicePixelRatio || 1;
-    let haps = [];
-    try {
-      haps = (scheduler().pattern?.queryArc(from, from + CYCLES) ?? []).filter((x) => x.whole);
-    } catch (e) {
-      console.warn('viz', e);
+    shownFrom = from;
+    if (rowsStale) {
+      // a new pattern: collect its rows from a longer stretch than is on screen, so they don't keep appearing
+      seen = new Map();
+      addRows(query(from, from + Math.max(8, CYCLES * 3)));
+      rowsStale = seen.size === 0; // the new pattern may not be in place yet; try again next frame
     }
+    const haps = query(from, from + CYCLES);
+    addRows(haps);
     ctx.clearRect(0, 0, w, h);
 
-    // rows: blocks in code order from the top; inside a block high notes on top, then unpitched sounds by name
-    const byBlock = new Map();
-    for (const hap of haps) {
-      const b = blockOf(hap);
-      const lane = laneOf(hap.value);
-      hap._b = b;
-      hap._lane = lane;
-      if (!byBlock.has(b)) byBlock.set(b, new Set());
-      byBlock.get(b).add(lane);
-    }
-    const rows = [];
-    for (const b of [...byBlock.keys()].sort((x, y) => (x === -1 ? 1 : y === -1 ? -1 : x - y))) {
-      const lanes = [...byBlock.get(b)].sort((x, y) =>
-        typeof x === typeof y ? (typeof x === 'number' ? y - x : String(x).localeCompare(String(y))) : typeof x === 'number' ? -1 : 1,
-      );
-      for (const lane of lanes) rows.push({ b, lane });
-    }
+    const rows = sortedRows();
     const rowIndex = new Map(rows.map((row, i) => [row.b + '|' + row.lane, i]));
     const gaps = new Set(rows.map((row, i) => (i && rows[i - 1].b !== row.b ? i : -1)).filter((i) => i > 0));
     const gapH = 6 * r;
-    const laneH = Math.min(26 * r, (h - 8 * r - gaps.size * gapH) / Math.max(rows.length, 1));
+    const rulerH = RULER_H * r;
+    const avail = h - rulerH - 8 * r;
+    const fit = (avail - gaps.size * gapH) / Math.max(rows.length, 1);
+    const laneH = Math.min(MAX_LANE * r, Math.max(MIN_LANE * r, fit));
     const used = laneH * rows.length + gaps.size * gapH;
-    const top = Math.max(4 * r, (h - used) / 2);
+    maxScroll = Math.max(0, (used - avail) / r);
+    // scrollY is only clamped by user scrolling, so a moment without rows (while a pattern swaps) doesn't reset it
+    const sy = Math.min(scrollY, maxScroll);
+    const top = rulerH + 4 * r + (used < avail ? (avail - used) / 2 : 0) - sy * r;
     const rowY = [];
     let y = top;
     rows.forEach((_, i) => {
@@ -174,7 +233,29 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick }) 
     });
     const lw = LABEL_W * r;
     const W = w - lw;
+    const xOf = (c) => lw + ((c - from) / CYCLES) * W;
     const colorOf = (b) => colors[b === -1 ? '--j-oat' : src.blocks[b]?.color] || colors['--j-pink'];
+    // cycle numbers: every cycle, or every 2nd/4th/... when zoomed far out; quarter-cycle ticks when zoomed in
+    const step = CYCLES <= 1 ? 0.25 : 2 ** Math.max(0, Math.ceil(Math.log2(CYCLES / 8)));
+    const firstTick = Math.ceil(from / step - 1e-9) * step;
+
+    // everything below the ruler is clipped to the note area, so scrolled rows slide under it
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, rulerH, w, h - rulerH);
+    ctx.clip();
+
+    // grid: a faint line at each tick
+    ctx.globalAlpha = 0.12;
+    ctx.strokeStyle = colors['--j-edge'];
+    ctx.lineWidth = r;
+    for (let c = firstTick; c <= from + CYCLES; c += step) {
+      ctx.beginPath();
+      ctx.moveTo(Math.round(xOf(c)) + 0.5 * r, rulerH);
+      ctx.lineTo(Math.round(xOf(c)) + 0.5 * r, h);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
 
     // notes
     rects = [];
@@ -182,11 +263,11 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick }) 
     ctx.strokeStyle = colors['--j-edge'];
     for (const hap of haps) {
       const i = rowIndex.get(hap._b + '|' + hap._lane);
-      const x = lw + ((hap.whole.begin - from) / CYCLES) * W;
+      const x = xOf(hap.whole.begin);
       const bw = Math.max(3 * r, (hap.duration / CYCLES) * W - 2 * r);
       const ny = rowY[i] + r;
       const nh = Math.max(2 * r, laneH - 2 * r);
-      if (x + bw < lw) continue;
+      if (x + bw < lw || ny + nh < rulerH || ny > h) continue;
       const active = hap.whole.begin <= now && hap.endClipped > now;
       const isHover = hoverKey !== '' && hoverKey === `${hap.whole.begin}|${hap._b}|${laneLabel(hap._lane)}`;
       ctx.globalAlpha = isHover ? 1 : (active ? 1 : 0.75) * Math.min(1, Math.max(0.4, (hap.value?.gain ?? 1) * (hap.value?.velocity ?? 1)));
@@ -240,16 +321,55 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick }) 
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+    ctx.restore();
 
-    // playhead
-    ctx.globalAlpha = headAlpha;
-    ctx.strokeStyle = colors['--j-edge'];
-    ctx.lineWidth = 2.5 * r;
+    // ruler
+    ctx.fillStyle = colors['--j-panel'];
+    ctx.fillRect(0, 0, w, rulerH);
+    ctx.globalAlpha = 0.3;
+    ctx.strokeStyle = colors['--j-soft'];
+    ctx.lineWidth = r;
     ctx.beginPath();
-    ctx.moveTo(lw + headAt * W, 0);
-    ctx.lineTo(lw + headAt * W, h);
+    ctx.moveTo(0, rulerH - 0.5 * r);
+    ctx.lineTo(w, rulerH - 0.5 * r);
     ctx.stroke();
     ctx.globalAlpha = 1;
+    ctx.fillStyle = colors['--j-soft'];
+    ctx.font = `700 ${10 * r}px Nunito, system-ui, sans-serif`;
+    ctx.textBaseline = 'middle';
+    for (let c = firstTick; c <= from + CYCLES; c += step) {
+      const x = Math.round(xOf(c));
+      if (x < lw - 0.5) continue;
+      const whole = Math.abs(c - Math.round(c)) < 1e-9;
+      ctx.fillRect(x, whole ? 3 * r : rulerH - 5 * r, r, whole ? rulerH - 3 * r : 5 * r);
+      if (whole) ctx.fillText(String(Math.round(c)), x + 4 * r, rulerH / 2);
+    }
+
+    // playhead (only when it is in view)
+    const hx = xOf(head);
+    if (hx >= lw - r && hx <= w + r) {
+      ctx.globalAlpha = headAlpha;
+      ctx.strokeStyle = colors['--j-edge'];
+      ctx.lineWidth = 2.5 * r;
+      ctx.beginPath();
+      ctx.moveTo(hx, 0);
+      ctx.lineTo(hx, h);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // vertical scrollbar when the rows don't fit, styled like the app's scrollbars
+    if (maxScroll > 0) {
+      const trackH = h - rulerH - 4 * r;
+      const thumbH = Math.max(20 * r, (trackH * avail) / used);
+      const ty = rulerH + 2 * r + ((trackH - thumbH) * sy) / maxScroll;
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = colors['--j-edge'];
+      ctx.beginPath();
+      ctx.roundRect(w - 7 * r, ty, 5 * r, thumbH, 2.5 * r);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
 
     if (mouse) hitTest();
   }
@@ -267,7 +387,7 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick }) 
     } else {
       hovered = hit;
     }
-    canvas.style.cursor = hovered ? 'pointer' : '';
+    canvas.style.cursor = drag?.moved ? 'grabbing' : hovered ? 'pointer' : 'grab';
     if (!hovered) {
       tip.hidden = true;
       return;
@@ -290,18 +410,62 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick }) 
     tip.style.left = Math.max(8, tx) + 'px';
     tip.style.top = (ty < 4 ? box.top - sbox.top + mouse.y + 16 : ty) + 'px';
   }
+  // drag: sideways pans through time, up/down scrolls the rows
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    drag = { x: e.clientX, y: e.clientY, from: follow ? shownFrom : viewFrom, scroll: Math.min(scrollY, maxScroll), panning: false, moved: false };
+    dragged = false;
+    canvas.setPointerCapture(e.pointerId);
+  });
   canvas.addEventListener('pointermove', (e) => {
     const box = canvas.getBoundingClientRect();
     mouse = { x: e.clientX - box.left, y: e.clientY - box.top };
+    if (drag) {
+      const dx = e.clientX - drag.x;
+      const dy = e.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) > 4) {
+        drag.moved = dragged = true;
+        canvas.style.cursor = 'grabbing';
+        tip.hidden = true;
+      }
+      if (!drag.moved) return;
+      if (!drag.panning && Math.abs(dx) > 4) {
+        drag.panning = true;
+        detach();
+      }
+      if (drag.panning) viewFrom = Math.max(0, drag.from - (dx / noteWidthCss()) * CYCLES);
+      scrollY = Math.min(maxScroll, Math.max(0, drag.scroll - dy));
+      if (!playing) still();
+      return;
+    }
     hitTest();
   });
+  const endDrag = () => {
+    if (!drag) return;
+    drag = null;
+    canvas.style.cursor = '';
+    hitTest();
+  };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
   canvas.addEventListener('pointerleave', () => {
+    if (drag) return;
     mouse = null;
     hitTest();
   });
   canvas.addEventListener('click', () => {
-    if (hovered) onPick?.(firstLoc(hovered.hap), src.code);
+    if (hovered && !dragged) onPick?.(firstLoc(hovered.hap), src.code);
   });
+  // wheel scrolls the rows; Shift+wheel or a sideways touchpad swipe pans; Ctrl+wheel (zoom) is handled by the app
+  canvas.addEventListener('wheel', (e) => {
+    if (e.ctrlKey) return;
+    e.preventDefault();
+    const px = e.deltaMode === 1 ? 16 : 1;
+    const dx = (e.shiftKey ? e.deltaY || e.deltaX : e.deltaX) * px;
+    const dy = (e.shiftKey ? 0 : e.deltaY) * px;
+    if (Math.abs(dx) > Math.abs(dy)) panBy(dx);
+    else if (dy) scrollBy(dy);
+  }, { passive: false });
 
   return {
     frame,
@@ -309,7 +473,13 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick }) 
     // the code the current pattern was evaluated from (for blocks, colours and line numbers)
     setSource(code) {
       src = { ...patternBlocks(code), code };
+      rowsStale = true;
       return src;
+    },
+    // follow the playhead again (stopped: back to cycle 0)
+    follow() {
+      setFollow(true);
+      if (visible && !playing) still();
     },
     setVisible(v) {
       visible = v;
@@ -324,6 +494,8 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick }) 
     },
     setPlaying(p) {
       playing = p;
+      // starting or stopping always goes back to following
+      setFollow(true);
       strip.classList.toggle('playing', p);
       if (visible && !p) still();
     },
@@ -333,6 +505,7 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick }) 
     },
     // the pattern changed (evaluated while stopped)
     redraw() {
+      rowsStale = true;
       if (visible && !playing) still();
     },
   };

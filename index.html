@@ -64,10 +64,14 @@
       <div class="panel-head">
         <span class="panel-title">Piano roll</span>
         <div class="head-group" role="group" aria-label="Zoom">
-          <button type="button" class="head-btn sq zoom-btn" id="zoom-in" data-testid="zoom-in" aria-label="Zoom in" title="Zoom in (scroll up on the roll)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"></path></svg></button>
+          <button type="button" class="head-btn sq zoom-btn" id="zoom-in" data-testid="zoom-in" aria-label="Zoom in" title="Zoom in (Ctrl+scroll on the roll)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"></path></svg></button>
           <span class="zoom-val" id="zoom-val" data-testid="zoom-val"></span>
-          <button type="button" class="head-btn sq zoom-btn" id="zoom-out" data-testid="zoom-out" aria-label="Zoom out" title="Zoom out (scroll down on the roll)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 12h12"></path></svg></button>
+          <button type="button" class="head-btn sq zoom-btn" id="zoom-out" data-testid="zoom-out" aria-label="Zoom out" title="Zoom out (Ctrl+scroll on the roll)"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 12h12"></path></svg></button>
         </div>
+        <span class="head-spacer"></span>
+        <button type="button" class="head-btn btn-sky" id="viz-follow" data-testid="viz-follow" hidden title="Back to the playhead">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z" fill="currentColor"></path></svg>Follow
+        </button>
       </div>
       <canvas id="viz-canvas"></canvas>
     </section>

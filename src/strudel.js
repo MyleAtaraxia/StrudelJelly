@@ -4,8 +4,9 @@ import { aliasBank, registerSynthSounds, registerZZFXSounds, samples, getAudioCo
 import { StrudelMirror, themes, settings as themeSettings } from '@strudel/codemirror';
 import { transpiler } from '@strudel/transpiler';
 import { getDrawContext } from '@strudel/draw';
-import { EditorView, Decoration, gutter, GutterMarker } from '@codemirror/view';
-import { EditorState, StateField, StateEffect, RangeSet } from '@codemirror/state';
+import { EditorView, Decoration, gutter, GutterMarker, drawSelection, keymap } from '@codemirror/view';
+import { selectNextOccurrence } from '@codemirror/search';
+import { EditorState, StateField, StateEffect, RangeSet, Prec } from '@codemirror/state';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import gm from '@strudel/soundfonts/gm.mjs';
@@ -154,6 +155,9 @@ const sourceHighlight = StateField.define({
   provide: (f) => EditorView.decorations.from(f),
 });
 const sourceExtensions = [patternMarks, gutter({ class: 'cm-pat-gutter', markers: (v) => v.state.field(patternMarks) }), sourceHighlight];
+// Multiple cursors: Ctrl+click adds one, Alt+drag makes a column of them, Ctrl+Alt+Up/Down adds one above/below,
+// Ctrl+D selects the next match. drawSelection is needed to show more than one cursor (Strudel's setup leaves it out).
+const multiCursorExtensions = [drawSelection(), Prec.high(keymap.of([{ key: 'Mod-d', run: selectNextOccurrence, preventDefault: true }]))];
 const BASE_SETTINGS = {
   fontFamily: '"Cascadia Code", Consolas, monospace',
   isTooltipEnabled: true,
@@ -161,6 +165,8 @@ const BASE_SETTINGS = {
   isBracketMatchingEnabled: true,
   isBracketClosingEnabled: true,
   isActiveLineHighlighted: true,
+  isTabIndentationEnabled: true, // Tab indents; Esc then Tab leaves the editor
+  isMultiCursorEnabled: true,
 };
 
 export function createEditor({ root, initialCode, onUpdateState, onEvalError, onEval, onFrame, settings }) {
@@ -170,7 +176,7 @@ export function createEditor({ root, initialCode, onUpdateState, onEvalError, on
   const create = EditorState.create;
   EditorState.create = (config = {}) => {
     if (!baseExtensions) {
-      baseExtensions = [config.extensions ?? [], docListenerExt, sourceExtensions];
+      baseExtensions = [config.extensions ?? [], docListenerExt, sourceExtensions, multiCursorExtensions];
       config = { ...config, extensions: baseExtensions };
     }
     return create.call(EditorState, config);
