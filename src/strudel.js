@@ -5,7 +5,7 @@ import { StrudelMirror, themes, settings as themeSettings } from '@strudel/codem
 import { transpiler } from '@strudel/transpiler';
 import { getDrawContext } from '@strudel/draw';
 import { EditorView } from '@codemirror/view';
-import { StateEffect, Transaction } from '@codemirror/state';
+import { EditorState } from '@codemirror/state';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import gm from '@strudel/soundfonts/gm.mjs';
@@ -104,9 +104,35 @@ async function prebake() {
   await loadLibrary().catch((e) => console.warn('library', e));
 }
 
+// One update listener feeds every onDocChange subscriber. It is part of the base extensions, so it survives
+// openDoc() swapping in a fresh EditorState for another sketch.
+const docListeners = new Set();
+const docListenerExt = EditorView.updateListener.of((v) => v.docChanged && docListeners.forEach((fn) => fn(v)));
+let baseExtensions = null;
+const BASE_SETTINGS = {
+  fontFamily: '"Cascadia Code", Consolas, monospace',
+  isTooltipEnabled: true,
+  isFlashEnabled: true,
+  isBracketMatchingEnabled: true,
+  isBracketClosingEnabled: true,
+  isActiveLineHighlighted: true,
+};
+
 export function createEditor({ root, initialCode, onUpdateState, onEvalError, onEval, onFrame, settings }) {
   initAudioOnFirstClick();
-  const editor = new StrudelMirror({
+  // StrudelMirror builds its EditorState internally; borrow its extension list so every sketch can get its own
+  // state (and so its own undo history) with exactly the same setup.
+  const create = EditorState.create;
+  EditorState.create = (config = {}) => {
+    if (!baseExtensions) {
+      baseExtensions = [config.extensions ?? [], docListenerExt];
+      config = { ...config, extensions: baseExtensions };
+    }
+    return create.call(EditorState, config);
+  };
+  let editor;
+  try {
+    editor = new StrudelMirror({
     defaultOutput: webaudioOutput,
     getTime: () => getAudioContext().currentTime,
     transpiler,
@@ -129,34 +155,47 @@ export function createEditor({ root, initialCode, onUpdateState, onEvalError, on
     },
     onEvalError: (err) => onEvalError?.(err),
   });
-  editor.updateSettings({
-    fontFamily: '"Cascadia Code", Consolas, monospace',
-    isTooltipEnabled: true,
-    isFlashEnabled: true,
-    isBracketMatchingEnabled: true,
-    isBracketClosingEnabled: true,
-    isActiveLineHighlighted: true,
-    ...settings,
-  });
+  } finally {
+    EditorState.create = create;
+  }
+  editor.updateSettings({ ...BASE_SETTINGS, ...settings });
   return editor;
+}
+
+// Show another sketch. Each sketch keeps its own EditorState (text, cursor, undo history) in `cached`; a cached state
+// is reused only if it still matches the file. Settings are re-applied because they may have changed meanwhile.
+export function openDoc(editor, code, cached, settings) {
+  const state = cached && cached.doc.toString() === code ? cached : EditorState.create({ doc: code, extensions: baseExtensions });
+  editor.editor.setState(state);
+  editor.code = code;
+  editor.repl.setCode?.(code);
+  editor.updateSettings({ ...BASE_SETTINGS, ...settings });
+  editor.editor.dispatch({ scrollIntoView: true });
+}
+
+// Evaluate the code without starting playback (hot reload, and the piano roll while stopped). Code that does not
+// parse yet (half-typed) is skipped silently and the last good pattern stays.
+export async function softEvaluate(editor) {
+  const code = editor.code;
+  if (!code.trim()) return false;
+  try {
+    transpiler(code); // also parses the mini-notation strings
+  } catch {
+    return false;
+  }
+  await editor.repl.evaluate(code, false);
+  return true;
 }
 
 // call fn on every document change (typing and programmatic replacement alike)
 export function onDocChange(editor, fn) {
-  editor.editor.dispatch({
-    effects: StateEffect.appendConfig.of(EditorView.updateListener.of((v) => v.docChanged && fn(v))),
-  });
+  docListeners.add(fn);
 }
 
-// swap the whole document (opening another sketch) without making it an undo step
+// replace the whole document as a normal (undoable) edit, e.g. when the file changed on disk
 export function replaceDoc(editor, code) {
   const view = editor.editor;
-  view.dispatch({
-    changes: { from: 0, to: view.state.doc.length, insert: code },
-    selection: { anchor: 0 },
-    annotations: Transaction.addToHistory.of(false),
-    scrollIntoView: true,
-  });
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: code } });
 }
 
 // every url the built-in sounds can fetch, for "save all sounds offline"

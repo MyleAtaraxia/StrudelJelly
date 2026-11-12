@@ -1,4 +1,4 @@
-import { onDocChange, replaceDoc } from './strudel.js';
+import { onDocChange, replaceDoc, openDoc } from './strudel.js';
 
 // Saved sketches: one .js file each, through window.jelly.sketch*.
 // Every operation that touches the open sketch runs through one promise queue, so a debounced autosave, a switch,
@@ -23,7 +23,8 @@ function ago(ms) {
   return new Date(ms).toLocaleDateString();
 }
 
-export function createSketches({ editor, store, jelly, container, defaultCode, showPane, onName, onSaveState }) {
+export function createSketches({ editor, store, jelly, container, defaultCode, showPane, onName, onSaveState, onOpen, getSettings }) {
+  const states = new Map(); // sketch name -> its EditorState (text, cursor, undo history)
   let current = null;
   let list = [];
   let dirty = false;
@@ -82,9 +83,12 @@ export function createSketches({ editor, store, jelly, container, defaultCode, s
     await flush();
     const code = await jelly.sketchRead(name);
     await flush();
-    setDoc(code);
+    if (current != null) states.set(current, editor.editor.state);
+    loading = true;
+    try { openDoc(editor, code, states.get(name), getSettings?.()); } finally { loading = false; }
     dirty = false;
     setCurrent(name);
+    onOpen?.(name);
   }
   const open = (name) => (name === current ? Promise.resolve() : enqueue(() => load(name).catch(() => refresh())));
 
@@ -126,6 +130,7 @@ export function createSketches({ editor, store, jelly, container, defaultCode, s
       if (!to || to === name) return;
       if (name === current) await flush();
       const final = await jelly.sketchRename(name, to);
+      if (states.has(name)) { states.set(final, states.get(name)); states.delete(name); }
       await refresh();
       if (name === current) setCurrent(final);
     });
@@ -137,6 +142,7 @@ export function createSketches({ editor, store, jelly, container, defaultCode, s
         dirty = false;
       }
       await jelly.sketchDelete(name);
+      states.delete(name);
       await refresh();
       if (name === current) {
         current = null;

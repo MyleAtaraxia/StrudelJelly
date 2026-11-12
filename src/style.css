@@ -147,9 +147,7 @@ button, input { font: inherit; color: inherit; }
 .viz {
   position: absolute; left: 0; right: 0; bottom: 0; height: 110px; z-index: 4;
   background: var(--j-ground); border-top: var(--j-line) solid var(--j-ink);
-  opacity: .55; transition: opacity 200ms;
 }
-.viz.playing { opacity: 1; }
 .viz canvas { display: block; width: 100%; height: 100%; }
 .editor-panel.has-viz #editor { bottom: 110px; }
 .viz-toggle {
@@ -225,6 +223,7 @@ button, input { font: inherit; color: inherit; }
 .set-group { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: var(--j-line) solid var(--j-ink); border-radius: 16px; background: var(--j-ground); }
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; font-size: 14px; }
 .set-row input[type="range"] { flex: 1; max-width: 160px; accent-color: var(--j-ink); }
+.set-label small { display: block; font-size: 12px; font-weight: 700; color: var(--j-soft); }
 .set-label b { font-weight: 800; color: var(--j-soft); }
 .set-note { margin: 0; font-size: 13px; }
 .segmented { display: flex; border: var(--j-line) solid var(--j-ink); border-radius: 999px; overflow: hidden; }

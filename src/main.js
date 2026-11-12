@@ -1,5 +1,5 @@
 import './style.css';
-import { createEditor, allBuiltinUrls, onDocChange } from './strudel.js';
+import { createEditor, allBuiltinUrls, onDocChange, softEvaluate } from './strudel.js';
 import { createSketches } from './sketches.js';
 import { createViz } from './viz.js';
 import { initSounds } from './sounds/index.js';
@@ -64,6 +64,7 @@ const EDITOR_DEFAULTS = {
   isPatternHighlightingEnabled: true,
   isLineNumbersDisplayed: true,
   visualStrip: true,
+  hotReload: true,
 };
 let prefs;
 try {
@@ -115,6 +116,7 @@ editor = createEditor({
   onEvalError: showError,
   onEval: () => {
     evalCode = editor.code;
+    try { viz?.redraw(); } catch (e) { console.warn('viz', e); }
     renderTransport();
     renderTempo();
   },
@@ -134,6 +136,28 @@ viz.setVisible(prefs.visualStrip);
 renderTempo();
 renderTransport();
 onDocChange(editor, renderTransport);
+
+// ---------- hot reload ----------
+// Re-evaluate shortly after typing stops. While stopped this only refreshes the pattern (for the piano roll); it never
+// starts playback. Code that does not parse yet is skipped, so the last good version keeps playing.
+const HOT_DELAY = 450;
+let hotTimer = null;
+let hotRun = Promise.resolve();
+const refreshPattern = () => {
+  hotRun = hotRun.then(() => softEvaluate(editor)).catch(showError);
+  return hotRun;
+};
+onDocChange(editor, () => {
+  clearTimeout(hotTimer);
+  if (loaded && prefs.hotReload) hotTimer = setTimeout(refreshPattern, HOT_DELAY);
+});
+const hotSetting = $('hot-setting');
+hotSetting.checked = prefs.hotReload;
+hotSetting.addEventListener('change', () => {
+  prefs.hotReload = hotSetting.checked;
+  savePrefs();
+  if (prefs.hotReload && loaded) refreshPattern();
+});
 
 playBtn.addEventListener('click', toggle);
 // the editor handles these itself while it has focus (and prevents default); this covers focus elsewhere
@@ -163,6 +187,16 @@ const sketches = createSketches({
   editor, store, jelly, container: $('pane-sketches'), defaultCode: DEFAULT_CODE,
   showPane: () => showPane('sketches'),
   onName: (name) => { nameBtn.textContent = name; },
+  getSettings: () => ({ ...prefs, theme: isDark() ? 'jellyDark' : 'jellyLight' }),
+  // a different sketch is open: stop the old one's music and show the new one's pattern
+  onOpen: () => {
+    clearTimeout(hotTimer);
+    if (started) editor.stop();
+    showError(null);
+    evalCode = editor.code;
+    if (loaded) refreshPattern();
+    renderTransport();
+  },
   onSaveState: (st) => {
     const el = $('save-state');
     el.dataset.state = st;
@@ -291,6 +325,7 @@ sketches.init().catch((e) => {
 editor.prebaked.catch(() => {}).then(() => {
   loaded = true;
   renderTransport();
+  refreshPattern(); // draw the piano roll for the open sketch
   urls = allBuiltinUrls();
   sounds.refresh();
   if (pane === 'settings') refreshOffline();
