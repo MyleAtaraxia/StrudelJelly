@@ -176,7 +176,7 @@ button, input { font: inherit; color: inherit; }
 .head-group { display: flex; align-items: center; gap: var(--sp-2); }
 .head-btn {
   min-width: 28px; height: 28px; padding: 0 var(--sp-2); display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1); cursor: pointer;
-  border: var(--j-line) solid var(--j-edge); border-radius: var(--r-sm); background: var(--j-panel); box-shadow: 0 2px 0 var(--j-edge);
+  border: var(--j-line) solid var(--j-edge); border-radius: var(--r-pill); background: var(--j-panel); box-shadow: 0 2px 0 var(--j-edge);
   font-weight: var(--fw-label); font-size: var(--fs-sm);
   transition: transform 220ms var(--j-ease), box-shadow 220ms var(--j-ease), background 160ms;
 }
@@ -214,7 +214,7 @@ button, input { font: inherit; color: inherit; }
 /* sketch name as an editor tab, plus save state */
 .sketch-name {
   max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; height: 28px; padding: 0 var(--sp-2); cursor: pointer;
-  border: var(--j-line) solid transparent; border-radius: var(--r-sm); background: transparent; font-weight: var(--fw-label); font-size: var(--fs-md);
+  border: var(--j-line) solid transparent; border-radius: var(--r-pill); background: transparent; font-weight: var(--fw-label); font-size: var(--fs-md);
   transition: background 160ms, border-color 160ms;
 }
 .sketch-name:hover { background: var(--j-ground); border-color: var(--j-edge); }
@@ -286,7 +286,7 @@ button, input { font: inherit; color: inherit; }
 .sk-row[aria-current="true"] .sk-time { color: #2B2430; opacity: .75; }
 .sk-more {
   width: 28px; height: 28px; margin-right: var(--sp-1); flex-shrink: 0; display: grid; place-items: center; cursor: pointer;
-  border: 0; border-radius: var(--r-sm); background: transparent; color: inherit; opacity: 0; transition: opacity 120ms, background 120ms;
+  border: 0; border-radius: var(--r-pill); background: transparent; color: inherit; opacity: 0; transition: opacity 120ms, background 120ms;
 }
 .sk-more svg { width: 18px; height: 18px; fill: currentColor; stroke: none; }
 .sk-row:hover .sk-more, .sk-more:focus-visible { opacity: 1; }

@@ -229,18 +229,14 @@ document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === '.' && playingExample()) stopExample();
 }, true);
 
-const vizToggle = $('viz-toggle');
 const vizSetting = $('viz-setting');
 function setViz(on) {
   prefs.visualStrip = on;
   viz.setVisible(on);
-  vizToggle.setAttribute('aria-pressed', String(on));
-  vizToggle.title = on ? 'Hide piano roll' : 'Show piano roll';
   vizSetting.checked = on;
   savePrefs();
 }
 setViz(prefs.visualStrip);
-vizToggle.addEventListener('click', () => setViz(!prefs.visualStrip));
 vizSetting.addEventListener('change', () => setViz(vizSetting.checked));
 
 // piano roll zoom: buttons, or Ctrl+wheel (or a touchpad pinch) over the roll; plain wheel scrolls and pans it (viz.js)

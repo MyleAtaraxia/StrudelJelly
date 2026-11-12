@@ -43,7 +43,7 @@
 .sb-search:focus-within { box-shadow: 0 0 0 3px var(--j-sky); }
 .sb-addbtn { flex-shrink: 0; padding: 0 var(--sp-3); }
 .sb-addbtn svg { width: 16px; height: 16px; }
-.icon-btn.sb-sm { width: 32px; height: 32px; border-radius: var(--r-sm); flex-shrink: 0; }
+.icon-btn.sb-sm { width: 32px; height: 32px; border-radius: var(--r-pill); flex-shrink: 0; }
 .icon-btn.sb-sm svg { width: 16px; height: 16px; }
 .sb-crumb { display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-3); flex-shrink: 0; }
 .sb-crumb-name { font-family: Fredoka, sans-serif; font-weight: var(--fw-label); font-size: var(--fs-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -83,7 +83,7 @@
 /* star: only on hover / focus / selection, always on for favourites */
 .sb-star {
   width: 24px; height: 24px; flex-shrink: 0; display: grid; place-items: center;
-  border: 0; border-radius: var(--r-sm); background: transparent; color: var(--j-soft); cursor: pointer; opacity: 0;
+  border: 0; border-radius: var(--r-pill); background: transparent; color: var(--j-soft); cursor: pointer; opacity: 0;
 }
 .sb-star svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
 .sb-row:hover .sb-star, .sb-row:focus-within .sb-star, .sb-row.is-sel .sb-star, .sb-star[aria-pressed="true"], .sb-star:focus-visible { opacity: 1; }
@@ -101,7 +101,7 @@
 }
 .sb-add {
   width: 24px; height: 24px; flex-shrink: 0; display: grid; place-items: center; padding: 0;
-  border: 2px solid var(--j-edge); border-radius: var(--r-sm); background: var(--j-mint); color: #2B2430; cursor: pointer;
+  border: 2px solid var(--j-edge); border-radius: var(--r-pill); background: var(--j-mint); color: #2B2430; cursor: pointer;
   opacity: 0; transition: opacity 100ms;
 }
 .sb-add svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; }
