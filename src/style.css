@@ -109,6 +109,9 @@ button, input { font: inherit; color: inherit; }
   box-shadow: 0 3px 0 var(--j-edge);
   transition: transform 220ms var(--j-ease), box-shadow 220ms var(--j-ease), background 160ms;
 }
+/* reserve room for the drop shadow below, so centring lines up the button and its shadow together */
+.btn, .segmented, .transport { margin-bottom: 3px; }
+.head-btn { margin-bottom: 2px; }
 .btn svg, .head-btn svg, .segmented svg { width: 18px; height: 18px; fill: currentColor; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 0 var(--j-edge); }
 .btn:active { transform: translateY(3px); box-shadow: 0 0 0 var(--j-edge); transition-duration: 60ms; }
