@@ -1,8 +1,9 @@
 import './style.css';
-import { createEditor, allBuiltinUrls, onDocChange, onSelectionChange, cursorPos, softEvaluate, setPatternMarks, highlightSource, revealSource } from './strudel.js';
+import { createEditor, allBuiltinUrls, onDocChange, onSelectionChange, cursorPos, softEvaluate, setPatternMarks, highlightSource, revealSource, stopExample, playingExample } from './strudel.js';
 import { createSketches } from './sketches.js';
 import { createViz, ZOOM_LEVELS, ROW_ZOOM_LEVELS } from './viz.js';
 import { initSounds } from './sounds/index.js';
+import { initDocs } from './docs/index.js';
 
 const $ = (id) => document.getElementById(id);
 const jelly = window.jelly;
@@ -144,7 +145,7 @@ function showError(err) {
   renderTransport();
 }
 const evaluate = () => editor.evaluate().catch(showError);
-const toggle = () => (started ? editor.stop() : evaluate());
+const toggle = () => (playingExample() ? stopExample() : started ? editor.stop() : evaluate());
 
 editor = createEditor({
   root: $('editor'),
@@ -167,6 +168,7 @@ editor = createEditor({
   onUpdateState: (s) => {
     if (!!s.started === started) return;
     started = !!s.started;
+    if (started) stopExample(); // one thing plays at a time
     viz?.setPlaying(started);
     clearInterval(tempoTimer);
     tempoTimer = started ? setInterval(renderTempo, 400) : null;
@@ -220,6 +222,10 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); evaluate(); }
   else if (e.key === '.') { e.preventDefault(); editor.stop(); }
 });
+// Ctrl+. also stops a docs example (the editor's own Ctrl+. only knows about the sketch)
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === '.' && playingExample()) stopExample();
+}, true);
 
 const vizToggle = $('viz-toggle');
 const vizSetting = $('viz-setting');
@@ -399,6 +405,7 @@ function showPane(name) {
   $('pane-sketches').hidden = name !== 'sketches';
   $('pane-sounds-wrap').hidden = name !== 'sounds';
   $('pane-settings').hidden = name !== 'settings';
+  $('pane-docs').hidden = name !== 'docs';
   if (name === 'settings') refreshOffline();
   if (name === 'sketches') sketches.refresh();
   store.set('jelly-pane', name || '');
@@ -408,6 +415,36 @@ document.querySelectorAll('[data-pane]').forEach((b) =>
 );
 
 const sounds = initSounds({ editor, store, jelly, container: $('pane-sounds'), showSounds: () => pane !== 'sounds' && showPane('sounds') });
+
+// ---------- docs: sidebar pane, hover card / F1, signature tip, Ctrl+K palette ----------
+const setTheme = (t) => { store.set('jelly-theme', t); applyTheme(); };
+const docs = initDocs({
+  editor,
+  container: $('pane-docs'),
+  showDocs: () => pane !== 'docs' && showPane('docs'),
+  sounds,
+  sketches: { list: () => jelly.sketchList(), open: (name) => sketches.open(name) },
+  commands: () => [
+    { label: started ? 'Stop' : 'Play', hint: started ? 'Ctrl+.' : 'Ctrl+Enter', run: toggle },
+    { label: 'New sketch', hint: 'Ctrl+N', run: () => sketches.create() },
+    { label: 'Save sketch', hint: 'Ctrl+S', run: () => sketches.save() },
+    { label: 'Rename sketch', run: () => nameBtn.dispatchEvent(new MouseEvent('dblclick')) },
+    { label: 'Duplicate sketch', run: () => sketches.duplicate() },
+    { label: 'Show sketches', run: () => showPane('sketches') },
+    { label: 'Show sounds', run: () => showPane('sounds') },
+    { label: 'Show docs', hint: 'F1', run: () => { showPane('docs'); docs.focusSearch(); } },
+    { label: 'Show settings', run: () => showPane('settings') },
+    { label: 'Hide side panel', run: () => showPane(null) },
+    { label: prefs.visualStrip ? 'Hide piano roll' : 'Show piano roll', run: () => setViz(!prefs.visualStrip) },
+    { label: 'Piano roll: follow the playhead', run: () => viz.follow() },
+    { label: prefs.hotReload ? 'Turn hot reload off' : 'Turn hot reload on', run: () => { hotSetting.checked = !prefs.hotReload; hotSetting.dispatchEvent(new Event('change')); } },
+    { label: 'Theme: light', run: () => setTheme('light') },
+    { label: 'Theme: dark', run: () => setTheme('dark') },
+    { label: 'Theme: follow system', run: () => setTheme('system') },
+    { label: 'Open sketches folder', run: () => jelly.openSketches() },
+  ],
+});
+onSelectionChange(editor, docs.onEditorUpdate);
 
 // ---------- offline sounds (in settings) ----------
 const fill = $('fill');

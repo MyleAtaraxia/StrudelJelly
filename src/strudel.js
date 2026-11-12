@@ -1,5 +1,5 @@
 import * as core from '@strudel/core';
-import { evalScope, noteToMidi, valueToMidi, Pattern, silence } from '@strudel/core';
+import { evalScope, noteToMidi, valueToMidi, Pattern, silence, repl, setTime, setCpsFunc, setTriggerFunc, getTriggerFunc, setIsStarted, setPattern as exposePattern } from '@strudel/core';
 import { aliasBank, registerSynthSounds, registerZZFXSounds, samples, getAudioContext, webaudioOutput, initAudioOnFirstClick, soundMap, superdough } from '@strudel/webaudio';
 import { StrudelMirror, themes, settings as themeSettings } from '@strudel/codemirror';
 import { transpiler } from '@strudel/transpiler';
@@ -160,7 +160,7 @@ const sourceExtensions = [patternMarks, gutter({ class: 'cm-pat-gutter', markers
 const multiCursorExtensions = [drawSelection(), Prec.high(keymap.of([{ key: 'Mod-d', run: selectNextOccurrence, preventDefault: true }]))];
 const BASE_SETTINGS = {
   fontFamily: '"Cascadia Code", Consolas, monospace',
-  isTooltipEnabled: true,
+  isTooltipEnabled: false, // replaced by the Docs hover card (src/docs)
   isFlashEnabled: true,
   isBracketMatchingEnabled: true,
   isBracketClosingEnabled: true,
@@ -326,6 +326,62 @@ export async function preview(name, type) {
   // a silent hit first waits for the sound to download, so the audible one starts on time
   await superdough({ ...value, gain: 0 }, ac.currentTime + 0.02, 0.01);
   await superdough({ ...value, gain: 0.8 }, ac.currentTime + 0.03, dur);
+}
+
+// ---------- doc examples ----------
+// Examples play on a second, private repl, so the sketch's code and pattern stay as they are. Only one thing plays at
+// a time: an example stops the sketch, and the sketch starting stops the example (main.js). Creating or running a repl
+// points Strudel's global time/cps/trigger hooks at it, so they are pointed back at the sketch's repl afterwards.
+let exRepl = null;
+let mainTrigger = null;
+let exTrigger = null;
+const exListeners = new Set();
+let exPlaying = null; // code of the example that is playing
+function pointAtSketch(editor) {
+  const r = editor.repl;
+  setTime(() => r.scheduler.now());
+  setCpsFunc(() => r.scheduler.cps);
+  if (mainTrigger) setTriggerFunc(mainTrigger);
+  exposePattern(r.state.pattern);
+  setIsStarted(r.state.started);
+}
+const tellExample = (err) => exListeners.forEach((fn) => fn(exPlaying, err));
+export async function playExample(editor, code) {
+  if (!exRepl) {
+    mainTrigger = getTriggerFunc();
+    exRepl = repl({
+      defaultOutput: webaudioOutput,
+      getTime: () => getAudioContext().currentTime,
+      transpiler,
+      onUpdateState: (st) => {
+        if (st.started || !exPlaying) return;
+        exPlaying = null;
+        pointAtSketch(editor);
+        tellExample(null);
+      },
+    });
+    exTrigger = getTriggerFunc();
+    pointAtSketch(editor);
+  }
+  if (editor.repl.state.started) editor.stop();
+  const ac = getAudioContext();
+  if (ac.state !== 'running') await ac.resume();
+  // evaluate() catches its own errors and returns no pattern then
+  const pattern = await exRepl.evaluate(code);
+  const err = pattern ? null : exRepl.state.evalError || new Error('example did not run');
+  exPlaying = err ? null : code;
+  if (err) { exRepl.stop(); pointAtSketch(editor); }
+  else { setCpsFunc(() => exRepl.scheduler.cps); setTriggerFunc(exTrigger); }
+  tellExample(err);
+  return !err;
+}
+export function stopExample() {
+  if (!exRepl || !exPlaying) return;
+  exRepl.stop(); // onUpdateState above clears exPlaying and repoints the hooks
+}
+export const playingExample = () => exPlaying;
+export function onExampleChange(fn) {
+  exListeners.add(fn);
 }
 
 export { soundMap };

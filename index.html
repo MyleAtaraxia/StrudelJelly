@@ -36,6 +36,9 @@
         <button type="button" data-pane="sounds" data-testid="pane-sounds" aria-label="Sounds" title="Sounds" aria-pressed="true">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM19 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"></path></svg>
         </button>
+        <button type="button" data-pane="docs" data-testid="pane-docs" aria-label="Docs" title="Docs (F1 on a function, Ctrl+K searches everything)" aria-pressed="false">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5zM12 6.5v13"></path></svg>
+        </button>
         <button type="button" data-pane="settings" data-testid="pane-settings" aria-label="Settings" title="Settings" aria-pressed="false">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M16 5v4M8 15v4"></path></svg>
         </button>
@@ -88,6 +91,8 @@
         <div class="panel-head"><span class="panel-title">Sounds</span></div>
         <div class="pane-body" id="pane-sounds"></div>
       </div>
+
+      <div class="pane pane-docs" id="pane-docs" aria-label="Docs" hidden></div>
 
       <div class="pane pane-settings" id="pane-settings" aria-label="Settings" hidden>
       <div class="panel-head"><span class="panel-title">Settings</span></div>

@@ -10,6 +10,8 @@ A desktop app for [Strudel](https://strudel.cc) live coding that runs entirely o
 - **Offline:** every sound fetched from the internet (built-in banks, soundfonts, `samples('github:...')`) is cached in `%APPDATA%\strudel-jelly\sound-cache`. **Settings → Save all sounds offline** downloads every built-in sound at once.
 - **Status bar** (bottom of the window): the current error, the cursor's line and column, and a spinner while sounds are loading.
 - **Editor:** Tab indents (press Esc, then Tab, to move focus out of the editor). Multiple cursors: Ctrl+click adds one, Alt+drag makes a column, Ctrl+Alt+Up/Down adds one above or below, Ctrl+D selects the next match.
+- **Docs** (book button, top right): every Strudel function with its parameters and examples, searchable and grouped, built from Strudel's own reference so it works offline. **Play** hears an example without touching your sketch (it stops the sketch; `Ctrl+.` stops the example), **Insert** adds it below the cursor line. Hover a function in the code, or press **F1** on it, for a card with the same info. Typing `(` or `,` in a call shows its parameters above the cursor (`Ctrl+Shift+Space` brings it back, Esc hides it); More opens the Docs pane.
+- **Search everything:** `Ctrl+K` finds functions, sounds, sketches and app commands in one list. Enter inserts the function or sound, opens the sketch or runs the command; `Ctrl+Enter` plays a function's first example.
 - **Settings** (sliders button, top right): theme, code size, line wrapping, suggestions, note highlighting, hot reload, piano roll, line numbers.
 - `F12` opens DevTools.
 

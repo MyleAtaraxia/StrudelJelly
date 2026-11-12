@@ -899,6 +899,8 @@ export function initSounds({ editor, store, jelly, container, showSounds }) {
   all = listSounds();
   setTab(tab);
   return {
+    names: () => all.map((s) => s.name),
+    insert: (name) => insertCode({ bare: name, full: `s("${name.replace(/["\\]/g, '')}")` }),
     refresh() {
       all = listSounds();
       rebuild({ selKey: rows[sel]?.key });
