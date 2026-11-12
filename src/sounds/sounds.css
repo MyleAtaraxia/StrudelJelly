@@ -15,7 +15,7 @@
 /* ---------- pill tabs ---------- */
 .sb-tabs {
   display: flex; flex-shrink: 0; margin: var(--sp-3) var(--sp-3) var(--sp-2); overflow: hidden;
-  border: var(--j-line) solid var(--j-edge); border-radius: var(--r-pill); box-shadow: 0 2px 0 var(--j-edge);
+  border: var(--j-line) solid var(--j-edge); border-radius: var(--r-pill);
   background: var(--j-panel);
 }
 .sb-tab {
