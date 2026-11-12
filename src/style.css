@@ -18,7 +18,27 @@
   --j-oat: #E6D7BD;
   --j-red: #F29CA8;
   --j-line: 2.5px;
+  --j-edge: var(--j-ink); /* outline and ledge colour (dimmer than text in dark mode) */
   --j-ease: cubic-bezier(.2, .7, .3, 1);
+  /* type scale: 500 for names and body text, 700 for labels and buttons, 800 for headings only */
+  --fs-xs: 11px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 20px;
+  --fw-body: 500;
+  --fw-label: 700;
+  --fw-head: 800;
+  /* 8px spacing grid (4px for tight spots) and one radius family */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 24px;
+  --r-pill: 999px;
   color-scheme: light;
 }
 :root[data-theme="dark"] {
@@ -34,6 +54,7 @@
   --j-butter: #DCC381;
   --j-oat: #B9A98F;
   --j-red: #E08A96;
+  --j-edge: #8F7F8C;
   color-scheme: dark;
 }
 /* fills stay light in dark mode, so text on them stays dark cocoa */
