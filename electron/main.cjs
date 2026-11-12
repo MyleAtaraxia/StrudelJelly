@@ -7,7 +7,8 @@ const crypto = require('node:crypto');
 const ORIGIN = 'jelly://app';
 const DIST = path.join(__dirname, '..', 'dist');
 const LIB = path.join(app.getPath('documents'), 'Strudel Jelly', 'samples');
-const CACHE = path.join(app.getPath('userData'), 'sound-cache');
+const SKETCHES = path.join(app.getPath('documents'), 'Strudel Jelly', 'sketches');
+const CACHE =path.join(app.getPath('userData'), 'sound-cache');
 const AUDIO = /\.(wav|mp3|ogg|flac|aiff?|m4a|opus|webm)$/i;
 const TYPES = {
   '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css',
@@ -217,6 +218,173 @@ function createWindow() {
   });
 }
 
+// ---------- sketches (Documents\Strudel Jelly\sketches) ----------
+
+const str = (v, what = 'argument') => {
+  if (typeof v !== 'string') throw new TypeError(`${what} must be a string`);
+  return v;
+};
+
+// Windows-safe sketch/file name: strip illegal and control chars, trim, max 80, never empty.
+function cleanName(raw) {
+  let n = str(raw, 'name').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '').trim().slice(0, 80).replace(/[. ]+$/, '').trim();
+  if (/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(n)) n += '_';
+  return n || 'untitled';
+}
+
+// Path of an existing sketch by its exact name; null if the name could escape the folder.
+function sketchFile(name) {
+  str(name, 'name');
+  if (!name || /[/\\\u0000]/.test(name)) return null;
+  return inside(SKETCHES, name + '.js');
+}
+const mustSketch = (name) => {
+  const f = sketchFile(name);
+  if (!f) throw new Error('invalid sketch name');
+  return f;
+};
+
+let lastWrite = 0; // when the app last changed the sketches folder itself
+const touched = () => { lastWrite = Date.now(); };
+const sketchOf = (file) => path.basename(file, '.js');
+
+async function newSketch(name, code) {
+  const dir = SKETCHES;
+  await fsp.mkdir(dir, { recursive: true });
+  touched();
+  for (;;) {
+    const dest = await uniqueDest(dir, cleanName(name) + '.js');
+    try {
+      await fsp.writeFile(dest, code, { flag: 'wx' });
+      return sketchOf(dest);
+    } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+    } finally {
+      touched();
+    }
+  }
+}
+
+async function sketchList() {
+  const out = [];
+  for (const e of await fsp.readdir(SKETCHES, { withFileTypes: true }).catch(() => [])) {
+    if (!e.isFile() || !/\.js$/i.test(e.name)) continue;
+    const st = await fsp.stat(path.join(SKETCHES, e.name)).catch(() => null);
+    if (st) out.push({ name: e.name.slice(0, -3), modified: Math.round(st.mtimeMs) });
+  }
+  return out.sort((a, b) => b.modified - a.modified);
+}
+
+async function sketchWrite(name, code) {
+  str(code, 'code');
+  const raw = str(name, 'name');
+  const exact = sketchFile(raw);
+  const file = exact && fs.existsSync(exact) ? exact : path.join(SKETCHES, cleanName(raw) + '.js');
+  await fsp.mkdir(SKETCHES, { recursive: true });
+  const tmp = path.join(SKETCHES, `.${path.basename(file)}.${process.pid}.tmp`);
+  touched();
+  try {
+    await fsp.writeFile(tmp, code);
+    await fsp.rename(tmp, file);
+  } catch (e) {
+    await fsp.rm(tmp, { force: true });
+    throw e;
+  } finally {
+    touched();
+  }
+}
+
+async function sketchRename(name, newName) {
+  const from = mustSketch(name);
+  const clean = cleanName(newName);
+  if (clean === name) return name;
+  touched();
+  try {
+    // case-only change (same file on Windows) renames in place; otherwise pick a free name
+    const to = clean.toLowerCase() === name.toLowerCase() ? path.join(SKETCHES, clean + '.js') : await uniqueDest(SKETCHES, clean + '.js');
+    await fsp.rename(from, to);
+    return sketchOf(to);
+  } finally {
+    touched();
+  }
+}
+
+async function sketchDuplicate(name) {
+  const code = await fsp.readFile(mustSketch(name), 'utf8');
+  return newSketch(cleanName(name) + ' copy', code);
+}
+
+async function sketchDelete(name) {
+  touched();
+  try {
+    await shell.trashItem(mustSketch(name));
+  } finally {
+    touched();
+  }
+}
+
+// ---------- user sounds: rename / delete / reveal ----------
+
+// Finds the library entry a sound name maps to, the way libraryMap does: later entries win,
+// folders without audio are skipped, loose audio files in the root are sounds of their own.
+async function findSound(name) {
+  str(name, 'name');
+  let found = null;
+  const names = new Set();
+  for (const e of await fsp.readdir(LIB, { withFileTypes: true }).catch(() => [])) {
+    const p = path.join(LIB, e.name);
+    if (e.isDirectory()) {
+      if (!(await walk(p)).length) continue;
+    } else if (!AUDIO.test(e.name)) continue;
+    const n = soundName(e.name);
+    names.add(n);
+    if (n === name) found = { path: p, dir: e.isDirectory() };
+  }
+  return { found, names };
+}
+
+async function mustSound(name) {
+  const { found, names } = await findSound(name);
+  if (!found || !inside(LIB, path.basename(found.path))) throw new Error(`no such sound: ${name}`);
+  return { ...found, names };
+}
+
+async function soundRename(name, newName) {
+  const s = await mustSound(name);
+  const base = soundName(str(newName, 'newName'));
+  if (base === name) return name;
+  let final = base;
+  for (let i = 2; s.names.has(final); i++) final = `${base}_${i}`;
+  const ext = s.dir ? '' : path.extname(s.path); // loose file keeps its extension
+  const to = inside(LIB, final + ext);
+  if (!to) throw new Error('invalid name');
+  await fsp.rename(s.path, to);
+  return final;
+}
+
+async function soundDelete(name) {
+  await shell.trashItem((await mustSound(name)).path);
+}
+
+async function soundReveal(name) {
+  const s = await mustSound(name);
+  if (s.dir) await shell.openPath(s.path);
+  else shell.showItemInFolder(s.path); // loose file: show it selected in the library root
+}
+
+let sketchTimer;
+function watchSketches() {
+  fs.mkdirSync(SKETCHES, { recursive: true });
+  fs.watch(SKETCHES, (_, file) => {
+    if (file && !/\.js$/i.test(file)) return;
+    if (Date.now() - lastWrite < 1000) return;
+    clearTimeout(sketchTimer);
+    sketchTimer = setTimeout(() => {
+      if (Date.now() - lastWrite >= 1000) win?.webContents.send('sketches-changed');
+    }, 300);
+  });
+}
+
 let watchTimer;
 function watchLibrary() {
   fs.mkdirSync(LIB, { recursive: true });
@@ -247,6 +415,20 @@ ipcMain.handle('cache:open', async () => {
   await fsp.mkdir(CACHE, { recursive: true });
   return shell.openPath(CACHE);
 });
+ipcMain.handle('sketch:list', () => sketchList());
+ipcMain.handle('sketch:read', (_, name) => fsp.readFile(mustSketch(name), 'utf8'));
+ipcMain.handle('sketch:write', (_, name, code) => sketchWrite(name, code));
+ipcMain.handle('sketch:create', (_, name, code) => newSketch(name, str(code ?? '', 'code')));
+ipcMain.handle('sketch:rename', (_, name, newName) => sketchRename(name, newName));
+ipcMain.handle('sketch:duplicate', (_, name) => sketchDuplicate(name));
+ipcMain.handle('sketch:delete', (_, name) => sketchDelete(name));
+ipcMain.handle('sketch:open', async () => {
+  await fsp.mkdir(SKETCHES, { recursive: true });
+  return shell.openPath(SKETCHES);
+});
+ipcMain.handle('sound:rename', (_, name, newName) => soundRename(name, newName));
+ipcMain.handle('sound:delete', (_, name) => soundDelete(name));
+ipcMain.handle('sound:reveal', (_, name) => soundReveal(name));
 ipcMain.handle('theme:titlebar', (_, color, symbolColor) => win?.setTitleBarOverlay({ color, symbolColor }));
 
 const primary = app.requestSingleInstanceLock();
@@ -263,6 +445,7 @@ app.whenReady().then(() => {
   interceptHttps();
   serveApp();
   watchLibrary();
+  watchSketches();
   createWindow();
 });
 app.on('window-all-closed', () => app.quit());

@@ -1,5 +1,7 @@
 import './style.css';
-import { createEditor, allBuiltinUrls } from './strudel.js';
+import { createEditor, allBuiltinUrls, onDocChange } from './strudel.js';
+import { createSketches } from './sketches.js';
+import { createViz } from './viz.js';
 import { initSounds } from './sounds/index.js';
 
 const $ = (id) => document.getElementById(id);
@@ -31,6 +33,7 @@ $: n("0 2 4 <6 7>").scale("C4:minor").s("gm_epiano1")
 // ---------- theme ----------
 const mq = matchMedia('(prefers-color-scheme: dark)');
 let editor;
+let viz;
 const isDark = () => {
   const pref = store.get('jelly-theme', 'system');
   return pref === 'dark' || (pref === 'system' && mq.matches);
@@ -41,6 +44,7 @@ function applyTheme() {
   document.querySelectorAll('[data-theme-choice]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.themeChoice === pref)));
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   editor?.reconfigureExtension('theme', dark ? 'jellyDark' : 'jellyLight');
+  viz?.refreshColors();
   jelly?.setTitlebar(dark ? '#2B2430' : '#FBE4E6', dark ? '#F6EADB' : '#5C4037');
 }
 mq.addEventListener('change', applyTheme);
@@ -59,6 +63,7 @@ const EDITOR_DEFAULTS = {
   isAutoCompletionEnabled: true,
   isPatternHighlightingEnabled: true,
   isLineNumbersDisplayed: true,
+  visualStrip: true,
 };
 let prefs;
 try {
@@ -69,39 +74,126 @@ try {
 const savePrefs = () => store.set('jelly-editor', JSON.stringify(prefs));
 
 // ---------- editor + transport ----------
-const pill = $('state');
 const errorBox = $('error');
+const playBtn = $('play');
+let loaded = false;
+let started = false;
+let evalError = null;
+let evalCode = '';
+let tempoTimer = null;
+
+const num = (n) => String(Math.round(n * 10) / 10);
+function renderTransport() {
+  const state = !loaded ? 'loading' : evalError ? 'error' : started ? 'playing' : 'ready';
+  document.body.dataset.state = state;
+  playBtn.disabled = !loaded;
+  playBtn.classList.toggle('loading', !loaded);
+  playBtn.classList.toggle('is-playing', started);
+  $('play-label').textContent = started ? 'Stop' : 'Play';
+  playBtn.title = !loaded ? 'Loading sounds' : started ? 'Stop (Ctrl+.). Ctrl+Enter updates.' : 'Play (Ctrl+Enter)';
+  $('update-hint').hidden = !(started && editor && editor.code !== evalCode);
+}
+function renderTempo() {
+  const cps = editor?.repl.scheduler.cps;
+  if (!cps) return;
+  // 4 beats per cycle (see the tooltip in index.html)
+  $('tempo').textContent = `${num(cps * 240)} BPM · ${num(cps * 60)} cpm`;
+}
 function showError(err) {
+  evalError = err || null;
   errorBox.hidden = !err;
   errorBox.textContent = err ? String(err.message || err) : '';
-  if (err) {
-    pill.textContent = 'Oops';
-    pill.className = 'pill err';
-  }
+  renderTransport();
 }
+const evaluate = () => editor.evaluate().catch(showError);
+const toggle = () => (started ? editor.stop() : evaluate());
 
 editor = createEditor({
   root: $('editor'),
-  initialCode: store.get('jelly-code', DEFAULT_CODE),
+  initialCode: '',
   settings: { ...prefs, theme: isDark() ? 'jellyDark' : 'jellyLight' },
   onEvalError: showError,
+  onEval: () => {
+    evalCode = editor.code;
+    renderTransport();
+    renderTempo();
+  },
+  onFrame: () => viz.frame(),
   onUpdateState: (s) => {
-    if (s.evalError) return;
-    pill.textContent = s.started ? 'Playing' : 'Stopped';
-    pill.className = 'pill' + (s.started ? ' playing' : '');
-    $('play').querySelector('span').textContent = s.started ? 'Update' : 'Play';
+    if (!!s.started === started) return;
+    started = !!s.started;
+    viz?.setPlaying(started);
+    clearInterval(tempoTimer);
+    tempoTimer = started ? setInterval(renderTempo, 400) : null;
+    renderTempo();
+    renderTransport();
   },
 });
-pill.textContent = 'Loading sounds';
+viz = createViz({ panel: $('editor-panel'), strip: $('viz'), canvas: $('viz-canvas'), scheduler: () => editor.repl.scheduler });
+viz.setVisible(prefs.visualStrip);
+renderTempo();
+renderTransport();
+onDocChange(editor, renderTransport);
 
-let savedCode = editor.code;
-const saveCode = () => {
-  if (editor.code !== savedCode) store.set('jelly-code', (savedCode = editor.code));
-};
-setInterval(saveCode, 1500);
-addEventListener('beforeunload', saveCode);
+playBtn.addEventListener('click', toggle);
+// the editor handles these itself while it has focus (and prevents default); this covers focus elsewhere
+document.addEventListener('keydown', (e) => {
+  if (e.defaultPrevented || !(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+  if (e.key === 'Enter') { e.preventDefault(); evaluate(); }
+  else if (e.key === '.') { e.preventDefault(); editor.stop(); }
+});
 
-$('play').addEventListener('click', () => editor.evaluate());
+const vizToggle = $('viz-toggle');
+const vizSetting = $('viz-setting');
+function setViz(on) {
+  prefs.visualStrip = on;
+  viz.setVisible(on);
+  vizToggle.setAttribute('aria-pressed', String(on));
+  vizToggle.title = on ? 'Hide visual strip' : 'Show visual strip';
+  vizSetting.checked = on;
+  savePrefs();
+}
+setViz(prefs.visualStrip);
+vizToggle.addEventListener('click', () => setViz(!prefs.visualStrip));
+vizSetting.addEventListener('change', () => setViz(vizSetting.checked));
+
+// ---------- sketches ----------
+const nameBtn = $('sketch-name');
+const sketches = createSketches({
+  editor, store, jelly, container: $('pane-sketches'), defaultCode: DEFAULT_CODE,
+  showPane: () => showPane('sketches'),
+  onName: (name) => { nameBtn.textContent = name; },
+  onSaveState: (st) => {
+    const el = $('save-state');
+    el.dataset.state = st;
+    el.textContent = { saved: 'Saved', edited: 'Edited', error: 'Save failed' }[st];
+  },
+});
+nameBtn.addEventListener('click', () => showPane('sketches'));
+nameBtn.addEventListener('dblclick', () => {
+  const input = document.createElement('input');
+  input.className = 'sketch-rename';
+  input.value = sketches.current() ?? '';
+  input.maxLength = 80;
+  input.spellcheck = false;
+  input.setAttribute('aria-label', 'Sketch name');
+  nameBtn.replaceWith(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = (commit) => {
+    if (done) return;
+    done = true;
+    input.replaceWith(nameBtn);
+    if (commit) sketches.renameCurrent(input.value);
+  };
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') finish(true);
+    else if (e.key === 'Escape') finish(false);
+  });
+  input.addEventListener('blur', () => finish(true));
+});
 
 const fontSize = $('font-size');
 fontSize.value = prefs.fontSize;
@@ -121,7 +213,6 @@ document.querySelectorAll('[data-setting]').forEach((box) => {
     savePrefs();
   });
 });
-$('stop').addEventListener('click', () => editor.stop());
 
 // ---------- sounds sidebar ----------
 const workspace = document.querySelector('.workspace');
@@ -130,9 +221,11 @@ function showPane(name) {
   pane = name;
   workspace.classList.toggle('no-sidebar', !name);
   document.querySelectorAll('[data-pane]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pane === name)));
+  $('pane-sketches').hidden = name !== 'sketches';
   $('pane-sounds').hidden = name !== 'sounds';
   $('pane-settings').hidden = name !== 'settings';
   if (name === 'settings') refreshOffline();
+  if (name === 'sketches') sketches.refresh();
   store.set('jelly-pane', name || '');
 }
 document.querySelectorAll('[data-pane]').forEach((b) =>
@@ -190,8 +283,14 @@ jelly.onPrefetch((p) => {
 $('open-cache').addEventListener('click', () => jelly.openCache());
 showPane(store.get('jelly-pane', 'sounds') || null);
 
-editor.prebaked.then(() => {
-  pill.textContent = 'Ready';
+sketches.init().catch((e) => {
+  console.warn('sketches', e);
+  nameBtn.textContent = 'sketches unavailable';
+});
+
+editor.prebaked.catch(() => {}).then(() => {
+  loaded = true;
+  renderTransport();
   urls = allBuiltinUrls();
   sounds.refresh();
   if (pane === 'settings') refreshOffline();

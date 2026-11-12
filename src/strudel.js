@@ -5,6 +5,7 @@ import { StrudelMirror, themes, settings as themeSettings } from '@strudel/codem
 import { transpiler } from '@strudel/transpiler';
 import { getDrawContext } from '@strudel/draw';
 import { EditorView } from '@codemirror/view';
+import { StateEffect, Transaction } from '@codemirror/state';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import gm from '@strudel/soundfonts/gm.mjs';
@@ -103,7 +104,7 @@ async function prebake() {
   await loadLibrary().catch((e) => console.warn('library', e));
 }
 
-export function createEditor({ root, initialCode, onUpdateState, onEvalError, settings }) {
+export function createEditor({ root, initialCode, onUpdateState, onEvalError, onEval, onFrame, settings }) {
   initAudioOnFirstClick();
   const editor = new StrudelMirror({
     defaultOutput: webaudioOutput,
@@ -117,7 +118,15 @@ export function createEditor({ root, initialCode, onUpdateState, onEvalError, se
     prebake,
     bgFill: false,
     onUpdateState,
-    afterEval: () => onEvalError?.(null),
+    // the default painter loop (user .onPaint / punchcard calls draw to #test-canvas), plus a per-frame tick for the visual strip
+    onDraw: (haps, time, painters) => {
+      painters?.forEach((painter) => painter(editor.drawContext, time, haps, editor.drawTime));
+      onFrame?.();
+    },
+    afterEval: () => {
+      onEvalError?.(null);
+      onEval?.();
+    },
     onEvalError: (err) => onEvalError?.(err),
   });
   editor.updateSettings({
@@ -130,6 +139,24 @@ export function createEditor({ root, initialCode, onUpdateState, onEvalError, se
     ...settings,
   });
   return editor;
+}
+
+// call fn on every document change (typing and programmatic replacement alike)
+export function onDocChange(editor, fn) {
+  editor.editor.dispatch({
+    effects: StateEffect.appendConfig.of(EditorView.updateListener.of((v) => v.docChanged && fn(v))),
+  });
+}
+
+// swap the whole document (opening another sketch) without making it an undo step
+export function replaceDoc(editor, code) {
+  const view = editor.editor;
+  view.dispatch({
+    changes: { from: 0, to: view.state.doc.length, insert: code },
+    selection: { anchor: 0 },
+    annotations: Transaction.addToHistory.of(false),
+    scrollIntoView: true,
+  });
 }
 
 // every url the built-in sounds can fetch, for "save all sounds offline"

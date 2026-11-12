@@ -13,22 +13,30 @@
       <span class="logo-dot" aria-hidden="true"></span>
       <span class="brand-name">strudel <b>jelly</b></span>
     </div>
+    <div class="sketch-title">
+      <button type="button" class="sketch-name" id="sketch-name" data-testid="sketch-name" title="Open sketches (double-click to rename)">&hellip;</button>
+      <span class="save-state" id="save-state" data-testid="save-state" data-state="saved" title="Autosaves after a short pause. Ctrl+S saves now."></span>
+    </div>
     <div class="transport">
-      <button type="button" class="btn btn-pink" id="play" title="Play / update (Ctrl+Enter)">
-        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"></path></svg>
-        <span>Play</span>
+      <button type="button" class="btn btn-pink play-btn" id="play" data-testid="play" disabled title="Loading sounds">
+        <span class="play-icon" aria-hidden="true">
+          <svg class="i-play" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"></path></svg>
+          <svg class="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"></rect></svg>
+          <span class="spinner"></span>
+        </span>
+        <span id="play-label">Play</span>
       </button>
-      <button type="button" class="btn btn-cream" id="stop" title="Stop (Ctrl+.)">
-        <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"></rect></svg>
-        <span>Stop</span>
-      </button>
-      <span class="pill" id="state">Waking up</span>
+      <span class="update-hint" id="update-hint" data-testid="update-hint" hidden>Ctrl+Enter to update</span>
+      <span class="tempo" id="tempo" data-testid="tempo" title="Tempo, assuming 4 beats per cycle (BPM = cycles per minute x 4)"></span>
     </div>
     <div class="titlebar-right">
-      <button type="button" class="icon-btn btn-sky" data-pane="sounds" aria-label="Sounds" aria-pressed="true">
+      <button type="button" class="icon-btn btn-mint" data-pane="sketches" data-testid="pane-sketches" aria-label="Sketches" title="Sketches" aria-pressed="false">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6zM14 3v5h5M9 13h7M9 17h5"></path></svg>
+      </button>
+      <button type="button" class="icon-btn btn-sky" data-pane="sounds" data-testid="pane-sounds" aria-label="Sounds" title="Sounds" aria-pressed="true">
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM19 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"></path></svg>
       </button>
-      <button type="button" class="icon-btn btn-lilac" data-pane="settings" aria-label="Settings" aria-pressed="false">
+      <button type="button" class="icon-btn btn-lilac" data-pane="settings" data-testid="pane-settings" aria-label="Settings" title="Settings" aria-pressed="false">
         <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M16 5v4M8 15v4"></path></svg>
       </button>
     </div>
@@ -40,9 +48,14 @@
       <canvas id="test-canvas"></canvas>
       <div id="editor"></div>
       <div class="error" id="error" role="alert" hidden></div>
+      <div class="viz" id="viz" data-testid="viz" hidden><canvas id="viz-canvas"></canvas></div>
+      <button type="button" class="viz-toggle" id="viz-toggle" data-testid="viz-toggle" aria-pressed="true" aria-label="Visual strip" title="Visual strip">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 8h5M7 13h6M12 17h7M14 8h6"></path></svg>
+      </button>
     </section>
 
     <aside class="panel sidebar" id="sidebar">
+      <div class="pane pane-sketches" id="pane-sketches" aria-label="Sketches" hidden></div>
       <div class="pane pane-sounds" id="pane-sounds" aria-label="Sounds"></div>
 
       <div class="pane pane-settings" id="pane-settings" aria-label="Settings" hidden>
@@ -69,6 +82,7 @@
         <label class="set-row toggle-row"><span class="set-label">Wrap long lines</span><input type="checkbox" class="toggle" data-setting="isLineWrappingEnabled"></label>
         <label class="set-row toggle-row"><span class="set-label">Suggestions while typing</span><input type="checkbox" class="toggle" data-setting="isAutoCompletionEnabled"></label>
         <label class="set-row toggle-row"><span class="set-label">Light up playing notes</span><input type="checkbox" class="toggle" data-setting="isPatternHighlightingEnabled"></label>
+        <label class="set-row toggle-row"><span class="set-label">Visual strip</span><input type="checkbox" class="toggle" id="viz-setting" data-testid="viz-setting"></label>
         <label class="set-row toggle-row"><span class="set-label">Line numbers</span><input type="checkbox" class="toggle" data-setting="isLineNumbersDisplayed"></label>
       </section>
 
