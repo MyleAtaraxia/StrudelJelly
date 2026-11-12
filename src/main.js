@@ -1,7 +1,7 @@
 import './style.css';
 import { createEditor, allBuiltinUrls, onDocChange, onSelectionChange, cursorPos, softEvaluate, setPatternMarks, highlightSource, revealSource } from './strudel.js';
 import { createSketches } from './sketches.js';
-import { createViz, ZOOM_LEVELS } from './viz.js';
+import { createViz, ZOOM_LEVELS, ROW_ZOOM_LEVELS } from './viz.js';
 import { initSounds } from './sounds/index.js';
 
 const $ = (id) => document.getElementById(id);
@@ -86,6 +86,7 @@ const EDITOR_DEFAULTS = {
   isLineNumbersDisplayed: true,
   visualStrip: true,
   vizCycles: 4,
+  vizRowZoom: 1,
   vizHeight: 170,
   hotReload: true,
 };
@@ -246,14 +247,32 @@ function setZoom(cycles) {
 const zoomBy = (step) => setZoom(ZOOM_LEVELS[Math.min(ZOOM_LEVELS.length - 1, Math.max(0, ZOOM_LEVELS.indexOf(prefs.vizCycles) + step))]);
 $('zoom-in').addEventListener('click', () => zoomBy(-1));
 $('zoom-out').addEventListener('click', () => zoomBy(1));
+// row height (vertical zoom): buttons, or Alt+wheel over the roll, which keeps the row under the mouse in place
+function setRowZoom(z, anchorY) {
+  prefs.vizRowZoom = ROW_ZOOM_LEVELS.includes(z) ? z : 1;
+  viz.setRowZoom(prefs.vizRowZoom, anchorY);
+  $('rows-val').textContent = `${prefs.vizRowZoom}\u00d7 rows`;
+  $('rows-in').disabled = prefs.vizRowZoom === ROW_ZOOM_LEVELS.at(-1);
+  $('rows-out').disabled = prefs.vizRowZoom === ROW_ZOOM_LEVELS[0];
+  savePrefs();
+}
+const rowZoomBy = (step, anchorY) =>
+  setRowZoom(ROW_ZOOM_LEVELS[Math.min(ROW_ZOOM_LEVELS.length - 1, Math.max(0, ROW_ZOOM_LEVELS.indexOf(prefs.vizRowZoom) + step))], anchorY);
+$('rows-in').addEventListener('click', () => rowZoomBy(1));
+$('rows-out').addEventListener('click', () => rowZoomBy(-1));
+
 let wheelAcc = 0;
 $('viz-canvas').addEventListener('wheel', (e) => {
-  if (!e.ctrlKey) return;
+  if (!e.ctrlKey && !e.altKey) return;
   e.preventDefault();
-  wheelAcc += e.deltaY;
-  if (Math.abs(wheelAcc) >= 60) { zoomBy(wheelAcc < 0 ? -1 : 1); wheelAcc = 0; }
+  wheelAcc += e.deltaY || e.deltaX; // some systems turn Alt+wheel into a sideways scroll
+  if (Math.abs(wheelAcc) < 60) return;
+  if (e.ctrlKey) zoomBy(wheelAcc < 0 ? -1 : 1);
+  else rowZoomBy(wheelAcc < 0 ? 1 : -1, e.offsetY);
+  wheelAcc = 0;
 }, { passive: false });
 setZoom(prefs.vizCycles);
+setRowZoom(prefs.vizRowZoom);
 
 // piano roll height: drag the handle between the two capsules (arrow keys work too, double-click resets)
 const mainCol = $('main-col');

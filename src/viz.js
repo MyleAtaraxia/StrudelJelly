@@ -12,12 +12,14 @@ import { noteToMidi, freqToMidi, midi2note } from '@strudel/core';
 // (hap.context.locations), so each note is assigned to its `$:` block (one colour per block, matching the bars in the
 // editor gutter), rows are labelled, and hovering or clicking a note points at its code.
 export const ZOOM_LEVELS = [0.5, 1, 2, 4, 8, 16, 32]; // cycles on screen
+export const ROW_ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3]; // row height, times the fitted height
 export const BLOCK_COLORS = ['--j-pink', '--j-sky', '--j-mint', '--j-lilac', '--j-butter', '--j-oat'];
 const PLAYHEAD = 0.25; // playhead position while playing, 0..1 across the note area
 const LABEL_W = 58; // css px
 const RULER_H = 18; // css px, cycle numbers along the top
 const MIN_LANE = 16; // css px; below this the rows scroll instead of shrinking
 const MAX_LANE = 26; // css px
+const SCROLL_W = 12; // css px, the scrollbar's own strip on the right (only while the rows scroll)
 const VARS = [...BLOCK_COLORS, '--j-ink', '--j-edge', '--j-ground', '--j-panel', '--j-soft'];
 const LABEL_RE = /^\s*([A-Za-z_$][\w$]*)\s*:(?!:)/; // `$:`, `bass:`, `_$:` ...
 
@@ -70,6 +72,7 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick, on
 
   let visible = false;
   let CYCLES = 4;
+  let rowZoom = 1;
   let playing = false;
   let colors = {};
   let w = 0;
@@ -147,7 +150,7 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick, on
     viewFrom = shownFrom;
     setFollow(false);
   }
-  const noteWidthCss = () => Math.max(1, canvas.clientWidth - LABEL_W);
+  const noteWidthCss = () => Math.max(1, canvas.clientWidth - LABEL_W - (maxScroll > 0 ? SCROLL_W : 0));
   function panBy(px) {
     detach();
     viewFrom = Math.max(0, viewFrom + (px / noteWidthCss()) * CYCLES);
@@ -218,7 +221,7 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick, on
     const rulerH = RULER_H * r;
     const avail = h - rulerH - 8 * r;
     const fit = (avail - gaps.size * gapH) / Math.max(rows.length, 1);
-    const laneH = Math.min(MAX_LANE * r, Math.max(MIN_LANE * r, fit));
+    const laneH = Math.min(MAX_LANE * r, Math.max(MIN_LANE * r, fit)) * rowZoom;
     const used = laneH * rows.length + gaps.size * gapH;
     maxScroll = Math.max(0, (used - avail) / r);
     // scrollY is only clamped by user scrolling, so a moment without rows (while a pattern swaps) doesn't reset it
@@ -232,7 +235,8 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick, on
       y += laneH;
     });
     const lw = LABEL_W * r;
-    const W = w - lw;
+    const sw = maxScroll > 0 ? SCROLL_W * r : 0; // scrollbar strip
+    const W = w - lw - sw;
     const xOf = (c) => lw + ((c - from) / CYCLES) * W;
     const colorOf = (b) => colors[b === -1 ? '--j-oat' : src.blocks[b]?.color] || colors['--j-pink'];
     // cycle numbers: every cycle, or every 2nd/4th/... when zoomed far out; quarter-cycle ticks when zoomed in
@@ -267,7 +271,7 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick, on
       const bw = Math.max(3 * r, (hap.duration / CYCLES) * W - 2 * r);
       const ny = rowY[i] + r;
       const nh = Math.max(2 * r, laneH - 2 * r);
-      if (x + bw < lw || ny + nh < rulerH || ny > h) continue;
+      if (x + bw < lw || x > w - sw || ny + nh < rulerH || ny > h) continue;
       const active = hap.whole.begin <= now && hap.endClipped > now;
       const isHover = hoverKey !== '' && hoverKey === `${hap.whole.begin}|${hap._b}|${laneLabel(hap._lane)}`;
       ctx.globalAlpha = isHover ? 1 : (active ? 1 : 0.75) * Math.min(1, Math.max(0.4, (hap.value?.gain ?? 1) * (hap.value?.velocity ?? 1)));
@@ -317,11 +321,25 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick, on
       const gy = rowY[i] - gapH / 2;
       ctx.beginPath();
       ctx.moveTo(lw, gy);
-      ctx.lineTo(w, gy);
+      ctx.lineTo(w - sw, gy);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
     ctx.restore();
+
+    // the scrollbar's strip: notes end at its edge instead of running under the scrollbar
+    if (sw) {
+      ctx.fillStyle = colors['--j-panel'];
+      ctx.fillRect(w - sw, 0, sw, h);
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = colors['--j-soft'];
+      ctx.lineWidth = r;
+      ctx.beginPath();
+      ctx.moveTo(w - sw + 0.5 * r, rulerH);
+      ctx.lineTo(w - sw + 0.5 * r, h);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
 
     // ruler
     ctx.fillStyle = colors['--j-panel'];
@@ -339,7 +357,7 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick, on
     ctx.textBaseline = 'middle';
     for (let c = firstTick; c <= from + CYCLES; c += step) {
       const x = Math.round(xOf(c));
-      if (x < lw - 0.5) continue;
+      if (x < lw - 0.5 || x > w - sw - 2 * r) continue;
       const whole = Math.abs(c - Math.round(c)) < 1e-9;
       ctx.fillRect(x, whole ? 3 * r : rulerH - 5 * r, r, whole ? rulerH - 3 * r : 5 * r);
       if (whole) ctx.fillText(String(Math.round(c)), x + 4 * r, rulerH / 2);
@@ -347,7 +365,7 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick, on
 
     // playhead (only when it is in view)
     const hx = xOf(head);
-    if (hx >= lw - r && hx <= w + r) {
+    if (hx >= lw - r && hx <= w - sw + r) {
       ctx.globalAlpha = headAlpha;
       ctx.strokeStyle = colors['--j-edge'];
       ctx.lineWidth = 2.5 * r;
@@ -366,7 +384,7 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick, on
       ctx.globalAlpha = 0.35;
       ctx.fillStyle = colors['--j-edge'];
       ctx.beginPath();
-      ctx.roundRect(w - 7 * r, ty, 5 * r, thumbH, 2.5 * r);
+      ctx.roundRect(w - sw + 3.5 * r, ty, 5 * r, thumbH, 2.5 * r);
       ctx.fill();
       ctx.globalAlpha = 1;
     }
@@ -458,7 +476,7 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick, on
   });
   // wheel scrolls the rows; Shift+wheel or a sideways touchpad swipe pans; Ctrl+wheel (zoom) is handled by the app
   canvas.addEventListener('wheel', (e) => {
-    if (e.ctrlKey) return;
+    if (e.ctrlKey || e.altKey) return; // zoom, handled by the app
     e.preventDefault();
     const px = e.deltaMode === 1 ? 16 : 1;
     const dx = (e.shiftKey ? e.deltaY || e.deltaX : e.deltaX) * px;
@@ -498,6 +516,15 @@ export function createViz({ panel, strip, canvas, scheduler, onHover, onPick, on
       setFollow(true);
       strip.classList.toggle('playing', p);
       if (visible && !p) still();
+    },
+    // row height; anchorY (css px from the canvas top) keeps the row under the mouse in place
+    setRowZoom(z, anchorY) {
+      if (anchorY != null && rowZoom) {
+        const off = Math.max(0, anchorY - RULER_H - 4);
+        scrollY = Math.max(0, (Math.min(scrollY, maxScroll) + off) * (z / rowZoom) - off);
+      }
+      rowZoom = z;
+      if (visible && !playing) still();
     },
     setCycles(n) {
       CYCLES = n;
