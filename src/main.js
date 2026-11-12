@@ -1,5 +1,6 @@
 import './style.css';
-import { createEditor, loadLibrary, listSounds, preview, allBuiltinUrls } from './strudel.js';
+import { createEditor, allBuiltinUrls } from './strudel.js';
+import { initSounds } from './sounds/index.js';
 
 const $ = (id) => document.getElementById(id);
 const jelly = window.jelly;
@@ -138,169 +139,7 @@ document.querySelectorAll('[data-pane]').forEach((b) =>
   b.addEventListener('click', () => showPane(pane === b.dataset.pane ? null : b.dataset.pane)),
 );
 
-const TAB_COLORS = {
-  mine: ['--j-pink', '--j-butter', '--j-mint', '--j-sky', '--j-lilac'],
-  drums: ['--j-butter', '--j-oat', '--j-pink'],
-  samples: ['--j-mint', '--j-sky', '--j-butter'],
-  instruments: ['--j-lilac', '--j-sky', '--j-pink'],
-};
-const LIMIT = 400;
-let tab = 'mine';
-
-const isDrum = (s) => s.baseUrl?.includes('tidal-drum-machines');
-
-function soundsFor(which) {
-  const all = listSounds();
-  if (which === 'mine') return all.filter((s) => s.tag === 'mine').map((s) => ({ ...s, insert: s.name }));
-  if (which === 'samples') return all.filter((s) => s.type === 'sample' && s.tag !== 'mine' && !isDrum(s)).map((s) => ({ ...s, insert: s.name }));
-  if (which === 'instruments') return all.filter((s) => s.type !== 'sample').map((s) => ({ ...s, insert: s.name, count: 0 }));
-  const banks = new Map();
-  for (const s of all.filter(isDrum)) {
-    const bank = s.name.split('_')[0];
-    const b = banks.get(bank) || { name: bank, type: 'sample', count: 0, bank: true, play: s.name };
-    b.count++;
-    if (s.name.endsWith('_bd')) b.play = s.name;
-    banks.set(bank, b);
-  }
-  return [...banks.values()];
-}
-
-function insertAtCursor(text) {
-  const view = editor.editor;
-  const { from, to } = view.state.selection.main;
-  view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length } });
-  view.focus();
-}
-
-function insertSound(item) {
-  const view = editor.editor;
-  const pos = view.state.selection.main.from;
-  const line = view.state.doc.lineAt(pos);
-  const before = line.text.slice(0, pos - line.from);
-  const inString = (before.match(/"/g) || []).length % 2 === 1;
-  if (item.bank) return insertAtCursor(inString ? item.name : `.bank("${item.name}")`);
-  if (inString) return insertAtCursor((/[\s"[<{(,]$/.test(before) ? '' : ' ') + item.name);
-  insertAtCursor(`s("${item.name}")`);
-}
-
-const PLAY_ICON = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"></path></svg>';
-
-function renderSounds() {
-  const q = $('search').value.trim().toLowerCase();
-  const items = soundsFor(tab).filter((s) => !q || s.name.toLowerCase().includes(q));
-  const chips = $('chips');
-  chips.replaceChildren();
-  const colors = TAB_COLORS[tab];
-  items.slice(0, LIMIT).forEach((item, i) => {
-    const chip = document.createElement('div');
-    chip.className = 'chip';
-    chip.style.setProperty('--chip', `var(${colors[i % colors.length]})`);
-    chip.style.animationDelay = `${Math.min(i, 30) * 12}ms`;
-    const play = document.createElement('button');
-    play.type = 'button';
-    play.className = 'chip-play';
-    play.setAttribute('aria-label', `Hear ${item.name}`);
-    play.innerHTML = PLAY_ICON;
-    play.addEventListener('click', async () => {
-      if (chip.classList.contains('loading')) return;
-      chip.classList.remove('failed');
-      const slow = setTimeout(() => chip.classList.add('loading'), 120);
-      play.setAttribute('aria-busy', 'true');
-      try {
-        await preview(item.play || item.name, item.type);
-        chip.classList.remove('loading');
-      } catch (e) {
-        console.warn(e);
-        chip.classList.remove('loading');
-        chip.classList.add('failed');
-        setTimeout(() => chip.classList.remove('failed'), 1200);
-      } finally {
-        clearTimeout(slow);
-        play.removeAttribute('aria-busy');
-      }
-    });
-    const name = document.createElement('button');
-    name.type = 'button';
-    name.className = 'chip-name';
-    name.title = item.bank ? `Insert .bank("${item.name}")` : `Insert ${item.name}`;
-    name.textContent = item.name;
-    if (item.count > 1) {
-      const c = document.createElement('span');
-      c.className = 'chip-count';
-      c.textContent = item.count;
-      name.append(c);
-    }
-    name.addEventListener('click', () => insertSound(item));
-    chip.append(play, name);
-    chips.append(chip);
-  });
-  if (!items.length) {
-    const empty = document.createElement('div');
-    empty.className = 'empty';
-    empty.textContent = tab === 'mine' && !q ? 'No sounds yet. Drop some audio files or folders anywhere on the window.' : 'Nothing matches that search.';
-    chips.append(empty);
-  }
-  const hints = {
-    mine: 'Click a name to put it in your code. Press the triangle to hear it.',
-    drums: 'Drum machines: use with s("bd sd hh") and .bank(...)',
-    samples: 'Sample sets. Use n("0 1 2") to pick variations.',
-    instruments: 'Synths, wavetables and General MIDI instruments. Play them with note(...)',
-  };
-  $('hint').textContent = items.length > LIMIT ? `Showing ${LIMIT} of ${items.length}. Search to narrow it down.` : hints[tab];
-}
-
-document.querySelectorAll('.tab').forEach((btn) =>
-  btn.addEventListener('click', () => {
-    tab = btn.dataset.tab;
-    document.querySelectorAll('.tab').forEach((b) => b.setAttribute('aria-selected', String(b === btn)));
-    $('mine-tools').hidden = tab !== 'mine';
-    renderSounds();
-  }),
-);
-$('search').addEventListener('input', renderSounds);
-
-// ---------- adding samples ----------
-const bankName = () => $('bank-name').value.trim() || 'my_sounds';
-async function addPaths(paths) {
-  if (!paths.length) return;
-  const n = await jelly.add(paths, bankName());
-  await refreshLibrary();
-  $('hint').textContent = n ? `Added ${n} sound file${n === 1 ? '' : 's'}.` : 'No audio files found in that.';
-}
-async function refreshLibrary() {
-  await loadLibrary().catch((e) => console.warn(e));
-  renderSounds();
-}
-
-$('add-files').addEventListener('click', async () => addPaths(await jelly.pick(false)));
-$('add-folder').addEventListener('click', async () => addPaths(await jelly.pick(true)));
-$('open-folder').addEventListener('click', () => jelly.openLibrary());
-jelly.onLibraryChanged(refreshLibrary);
-
-const dropzone = $('dropzone');
-let dragDepth = 0;
-const showMineTab = () => tab !== 'mine' && document.querySelector('.tab[data-tab="mine"]').click();
-addEventListener('dragenter', (e) => {
-  if (!e.dataTransfer?.types.includes('Files')) return;
-  if (dragDepth++ === 0) {
-    if (pane !== 'sounds') showPane('sounds');
-    showMineTab();
-    dropzone.classList.add('over');
-  }
-});
-addEventListener('dragleave', () => {
-  if (--dragDepth <= 0) {
-    dragDepth = 0;
-    dropzone.classList.remove('over');
-  }
-});
-addEventListener('dragover', (e) => e.preventDefault());
-addEventListener('drop', (e) => {
-  e.preventDefault();
-  dragDepth = 0;
-  dropzone.classList.remove('over');
-  addPaths([...(e.dataTransfer?.files || [])].map((f) => jelly.pathForFile(f)).filter(Boolean));
-});
+const sounds = initSounds({ editor, store, jelly, container: $('pane-sounds'), showSounds: () => pane !== 'sounds' && showPane('sounds') });
 
 // ---------- offline sounds (in settings) ----------
 const fill = $('fill');
@@ -354,6 +193,6 @@ showPane(store.get('jelly-pane', 'sounds') || null);
 editor.prebaked.then(() => {
   pill.textContent = 'Ready';
   urls = allBuiltinUrls();
-  renderSounds();
+  sounds.refresh();
   if (pane === 'settings') refreshOffline();
 });

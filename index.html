@@ -43,37 +43,7 @@
     </section>
 
     <aside class="panel sidebar" id="sidebar">
-      <div class="pane pane-sounds" id="pane-sounds" aria-label="Sounds">
-      <div class="tabs" role="tablist">
-        <button type="button" role="tab" class="tab tab-pink" data-tab="mine" aria-selected="true">Mine</button>
-        <button type="button" role="tab" class="tab tab-butter" data-tab="drums" aria-selected="false">Drums</button>
-        <button type="button" role="tab" class="tab tab-mint" data-tab="samples" aria-selected="false">Samples</button>
-        <button type="button" role="tab" class="tab tab-lilac" data-tab="instruments" aria-selected="false">Synths</button>
-      </div>
-      <div class="tab-body" id="tab-body">
-        <div class="search">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4"></path></svg>
-          <input type="search" id="search" aria-label="Search sounds" placeholder="Search sounds">
-        </div>
-
-        <div class="mine-tools" id="mine-tools">
-          <div class="dropzone" id="dropzone">
-            <svg class="drop-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"></path></svg>
-            <div class="dropzone-text"><b>Drop sounds or folders here</b><span>Each folder becomes one sound. Loose files go into the name below.</span></div>
-          </div>
-          <label class="field-label" for="bank-name">Name for loose files</label>
-          <input class="field" id="bank-name" type="text" value="my_sounds" spellcheck="false">
-          <div class="row">
-            <button type="button" class="btn btn-mint btn-sm" id="add-files">Add files</button>
-            <button type="button" class="btn btn-sky btn-sm" id="add-folder">Add folders</button>
-            <button type="button" class="btn btn-cream btn-sm" id="open-folder">Open folder</button>
-          </div>
-        </div>
-
-        <p class="hint" id="hint"></p>
-        <div class="chips" id="chips"></div>
-      </div>
-      </div>
+      <div class="pane pane-sounds" id="pane-sounds" aria-label="Sounds"></div>
 
       <div class="pane pane-settings" id="pane-settings" aria-label="Settings" hidden>
       <h2>Settings</h2>
