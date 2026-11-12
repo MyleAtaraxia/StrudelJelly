@@ -88,10 +88,11 @@ button, input { font: inherit; color: inherit; }
 
 /* transport pill: play, tempo, cycle counter */
 .transport {
-  position: relative; display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-1);
-  border: var(--j-line) solid var(--j-edge); border-radius: var(--r-pill); background: var(--j-panel); box-shadow: 0 3px 0 var(--j-edge);
+  position: relative; display: flex; align-items: center; gap: var(--sp-3); padding: 3px;
+  border: var(--j-line) solid var(--j-edge); border-radius: var(--r-pill); background: var(--j-panel);
 }
-.transport .btn { height: 36px; }
+/* the pill must fit in the 52px titlebar */
+.transport .btn { height: 32px; }
 .readout { display: flex; align-items: center; gap: var(--sp-2); padding-right: var(--sp-3); font-size: var(--fs-sm); color: var(--j-soft); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .readout b { font-weight: var(--fw-label); color: var(--j-ink); }
 .tempo { min-width: 16ch; text-align: right; cursor: default; }
@@ -110,13 +111,13 @@ button, input { font: inherit; color: inherit; }
   transition: transform 220ms var(--j-ease), box-shadow 220ms var(--j-ease), background 160ms;
 }
 /* reserve room for the drop shadow below, so centring lines up the button and its shadow together */
-.btn, .segmented, .transport { margin-bottom: 3px; }
+.btn, .segmented { margin-bottom: 3px; }
 .head-btn { margin-bottom: 2px; }
 .btn svg, .head-btn svg, .segmented svg { width: 18px; height: 18px; fill: currentColor; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 0 var(--j-edge); }
 .btn:active { transform: translateY(3px); box-shadow: 0 0 0 var(--j-edge); transition-duration: 60ms; }
 .btn:disabled { border-style: dashed; color: var(--j-soft); background: var(--j-oat); box-shadow: none; cursor: default; transform: none; }
-.play-btn { min-width: 88px; }
+.play-btn { width: 100px; padding: 0; } /* fixed, so Play/Stop doesn't resize the pill */
 .play-icon { position: relative; width: 18px; height: 18px; display: grid; place-items: center; }
 .play-icon svg, .play-icon .spinner { grid-area: 1 / 1; }
 .play-btn .i-stop, .play-btn .spinner { display: none; }
