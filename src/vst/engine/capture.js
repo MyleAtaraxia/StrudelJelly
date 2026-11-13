@@ -6,7 +6,9 @@
 // In host mode tap feeds capture stream 0 and nothing audible reaches ctx.destination, so audio is not heard twice.
 // Chromium keeps its sound card sink on purpose (see capture-worklet.js): that also makes the AudioContext clock the
 // sound card's clock, so there is little drift for the host to absorb.
-// streamInput(i) is where a route's audio enters stream i (step 3 routes .fx patterns to their own streams).
+// streamInput(i) is where a route's audio enters stream i. Superdough sounds routed through plugins (runtime.js) play
+// on orbit 1000 * stream + their own orbit; those orbits are wired to streamInput(stream) instead of the main mix.
+// Without the engine, routed audio plays dry through Chromium.
 import { getAudioContext, getSuperdoughAudioController } from '@strudel/webaudio';
 import workletUrl from './capture-worklet.js?url';
 
@@ -25,6 +27,10 @@ function setMode(toHost) {
   host = toHost;
   tap.disconnect();
   tap.connect(host ? inputs[0] : ac.destination);
+  for (let i = 1; i < inputs.length; i++) {
+    if (host) inputs[i].disconnect(ac.destination);
+    else inputs[i].connect(ac.destination);
+  }
   node.port.postMessage({ type: 'enable', on: host });
 }
 
@@ -34,7 +40,19 @@ export async function installCapture() {
   ac = getAudioContext();
   tap = new GainNode(ac, { channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers' });
   tap.connect(ac.destination); // Chromium output until the engine is ready
-  const out = getSuperdoughAudioController().output;
+  const ctl = getSuperdoughAudioController();
+  const getOrbit = ctl.getOrbit;
+  ctl.getOrbit = function (n, channels) {
+    const isNew = this.nodes[n] == null;
+    const orbit = getOrbit.call(this, n, channels);
+    const input = n >= 1000 ? inputs[Math.floor(n / 1000)] : null;
+    if (isNew && input) {
+      orbit.output.disconnect();
+      orbit.output.connect(input);
+    }
+    return orbit;
+  };
+  const out = ctl.output;
   const init = out.initializeAudio;
   out.initializeAudio = function () {
     init.call(this);
@@ -56,6 +74,7 @@ export async function installCapture() {
   inputs = Array.from({ length: MAX_STREAMS }, (_, i) => {
     const g = new GainNode(ac, { channelCount: 2, channelCountMode: 'explicit' });
     g.connect(node, 0, i);
+    if (i > 0) g.connect(ac.destination); // local mode: routes play dry (setMode switches this)
     return g;
   });
   node.connect(ac.destination); // inaudible in host mode, silent otherwise; keeps the worklet running

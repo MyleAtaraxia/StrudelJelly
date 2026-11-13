@@ -11,6 +11,10 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import gm from '@strudel/soundfonts/gm.mjs';
 import { installCapture } from './vst/engine/capture.js';
+import { installRuntime, wrapTranspiler, wrapOutput, beforeEval as vstBeforeEval, editPattern as vstEditPattern, panic as vstPanic } from './vst/runtime.js';
+
+// rack(), vst(), .fx(), .set() and synth entries (src/vst/runtime.js)
+const jellyTranspiler = wrapTranspiler(transpiler);
 
 const DS = 'https://raw.githubusercontent.com/felixroos/dough-samples/main';
 const TS = 'https://raw.githubusercontent.com/todepond/samples/main';
@@ -187,9 +191,14 @@ export function createEditor({ root, initialCode, onUpdateState, onEvalError, on
   let editor;
   try {
     editor = new StrudelMirror({
-    defaultOutput: webaudioOutput,
+    defaultOutput: wrapOutput(webaudioOutput),
     getTime: () => getAudioContext().currentTime,
-    transpiler,
+    transpiler: jellyTranspiler,
+    beforeEval: vstBeforeEval,
+    editPattern: vstEditPattern,
+    onToggle: (started) => {
+      if (!started) vstPanic();
+    },
     root,
     initialCode,
     pattern: silence,
@@ -213,6 +222,7 @@ export function createEditor({ root, initialCode, onUpdateState, onEvalError, on
     EditorState.create = create;
   }
   editor.updateSettings({ ...BASE_SETTINGS, ...settings });
+  installRuntime({ cycle: () => editor.repl.scheduler.now(), onError: (err) => onEvalError?.(err) });
   return editor;
 }
 
@@ -262,7 +272,7 @@ export async function softEvaluate(editor) {
   const code = editor.code;
   if (!code.trim()) return false;
   try {
-    transpiler(code); // also parses the mini-notation strings
+    jellyTranspiler(code); // also parses the mini-notation strings
   } catch {
     return false;
   }

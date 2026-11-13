@@ -42,9 +42,9 @@ reload(entry: string): void  // reload a crashed entry
 onRack(fn: (r: RackStatus) => void): () => void
 rackStatus(): RackStatus
 deleted(): Array<{ name: string, plugins: string[], deletedAt: number }>   // restorable for 10 minutes
-restore(name: string): void
+restore(name: string): { name: string, plugins: string[] } | null  // the next evaluate that has this entry gets its state back
 
-// meters, ~20 Hz: peak per entry copy summed per entry, 0..1 linear
+// meters, ~20 Hz: peak per entry copy summed per entry, 0..1 linear (rack entries only)
 onMeters(fn: (m: Record<string /* entry */, [number, number]>) => void): () => void
 
 // audio settings
@@ -82,6 +82,17 @@ lastRack(): RackStatus | null          // same as window.jelly.vst.rackStatus(),
 onRack(fn): () => void
 paramDiffs(entry: string, slot: number): Array<{ key: string, code: number | string, plugin: number | string }>
 ```
+
+### Engine notes
+
+- **Plugin names** are the VST3 names without the vendor (`"One"`, `"Pro-L 2"`, as `plugins()` lists them). `vst()` and `params()` also accept the vendor in front (`"FabFilter One"`) and ignore case. RackStatus `chain[].plugin` is the listed name.
+- **Inline chains** (`.fx(vst(...))`, `.fx([...])`) are groups named `inline:<plugin+plugin>:<k>` (k counts chains with the same plugins in code order). `openEditor`, `paramValues` and `reload` take that name like an entry name; RackStatus `entries` and `onMeters` list rack entries only.
+- `renamed` is set only on the status of the evaluate that did the rename; listen with `onRack`.
+- `.set("entry", { ... })` is recognised when written in that form (a string and an object literal); the transpiler pass turns it into `.$st(...)`. Any other `.set(...)` is Strudel's own. Its values are never saved: the `.rack` file keeps the value each parameter returns to (`base`).
+- `.cc(n, v)` sends a MIDI CC to a synth entry (`v` 0..1 is scaled to 0..127). A hap with a CC and no note sends only the CC.
+- `openEditor` errors (entry not loaded, crashed) go to the console; the call resolves either way.
+- Engine internals on `window.jelly.vst` (not for the UI): `_apply(spec)`, `_events(list)`, `_debug(cmd, args)` (tests, needs `JELLY_HOST_DEBUG=1`), `_openCapture`, `_stats`, `_setStreamLatency`.
+- `paramDiffs(entry, slot)` compares the values written in code with the last value each knob reported through `onParamChange` (natural units, or text for choices).
 
 ## Rack source helpers: `src/vst/rack-source.js` (UI)
 
