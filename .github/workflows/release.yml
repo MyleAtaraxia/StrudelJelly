@@ -35,6 +35,10 @@ jobs:
 
       - run: npm ci
 
+      # npm on the runner skips install scripts, so fetch Electron's binary (electron-builder packages it) by hand
+      - name: Download Electron
+        run: node node_modules/electron/install.js
+
       # a version tag sets the app's version (package.json is not bumped by hand)
       - name: Version from the tag
         if: startsWith(github.ref, 'refs/tags/v')

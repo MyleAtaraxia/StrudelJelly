@@ -7,7 +7,7 @@
     "dev": "vite build && electron .",
     "build": "vite build",
     "host:build": "node host/build.mjs",
-    "dist": "vite build && electron-builder --win dir"
+    "dist": "vite build && electron-builder --win dir --publish never"
   },
   "license": "AGPL-3.0-or-later",
   "devDependencies": {
