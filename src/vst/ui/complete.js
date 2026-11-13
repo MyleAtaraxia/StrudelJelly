@@ -5,7 +5,7 @@
 //   .s("|") .fx("|") .set("|") rack entry names (next to the sound names for .s)
 import { syntaxTree } from '@codemirror/language';
 import { findRack, findVstCalls, unq } from '../rack-source.js';
-import { api, getPlugins, findPlugin, paramsOf, fmtNum, lastRack, rackEntry, kindOf, h } from './state.js';
+import { api, getPlugins, findPlugin, paramsOf, fmtNum, lastRack, rackEntry, h } from './state.js';
 
 // syntax nodes are not unique objects (buffer nodes are made on demand): compare positions
 const same = (a, b) => !!a && !!b && a.from === b.from && a.to === b.to && a.name === b.name;
@@ -146,7 +146,8 @@ function entryOptions(state, c) {
   const status = lastRack();
   const out = [];
   for (const e of rack.entries) {
-    const kind = status?.entries.find((x) => x.name === e.name)?.kind || (e.plugins[0] ? kindOf(e.plugins[0].name) : 'effect');
+    // the code as it is now first (it may not have run yet, or its first plugin changed since), then the last run
+    const kind = (e.plugins[0] && findPlugin(e.plugins[0].name)?.kind) || status?.entries.find((x) => x.name === e.name)?.kind || 'effect';
     if (c.method === 's' && kind !== 'synth') continue;
     if (c.method === 'fx' && kind === 'synth') continue;
     out.push({ label: e.name, detail: e.plugins.map((p) => p.name).join(' > ') || undefined, type: 'text', vstKind: kind, boost: 20 });
