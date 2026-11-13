@@ -6,7 +6,7 @@
   display: flex; flex-direction: column;
   font-weight: var(--fw-body); font-size: var(--fs-sm);
 }
-.sb[data-tab="mine"] { --sb-accent: var(--j-pink); }
+.sb[data-tab="mine"] { --sb-accent: var(--j-accent); }
 .sb[data-tab="drums"] { --sb-accent: var(--j-butter); }
 .sb[data-tab="samples"] { --sb-accent: var(--j-mint); }
 .sb[data-tab="instruments"] { --sb-accent: var(--j-lilac); }
@@ -87,7 +87,7 @@
 }
 .sb-star svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
 .sb-row:hover .sb-star, .sb-row:focus-within .sb-star, .sb-row.is-sel .sb-star, .sb-star[aria-pressed="true"], .sb-star:focus-visible { opacity: 1; }
-.sb-star[aria-pressed="true"] svg { fill: var(--j-butter); stroke: #5C4037; }
+.sb-star[aria-pressed="true"] svg { fill: var(--j-butter); stroke: #3E3A25; }
 .sb-star:hover { background: var(--j-oat); }
 
 .sb-main { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--sp-2); overflow: hidden; white-space: nowrap; }
@@ -122,7 +122,7 @@
 .sb-pads { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: var(--sp-2); padding: var(--sp-1) var(--sp-3) var(--sp-3); }
 .sb-pad {
   position: relative; height: 64px; padding: var(--sp-1); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
-  border: var(--j-line) solid var(--j-edge); border-radius: var(--r-md); background: var(--pad, var(--j-sky)); color: #5C4037;
+  border: var(--j-line) solid var(--j-edge); border-radius: var(--r-md); background: var(--pad, var(--j-sky)); color: #3E3A25;
   box-shadow: 0 3px 0 var(--j-edge); cursor: pointer; transition: background 120ms, box-shadow 120ms, transform 60ms;
 }
 .sb-pad:hover { filter: brightness(1.04); }

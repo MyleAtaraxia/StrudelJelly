@@ -38,8 +38,8 @@
 .mx-plug.miss { background: var(--j-oat); border-style: dashed; color: #2B2430; }
 .mx-plug.crash { background: var(--j-red); color: #2B2430; }
 .mx-plug.dragging { opacity: .45; }
-.mx-plug.drop-before { box-shadow: -5px 0 0 var(--j-pink), 0 2px 0 var(--j-edge); }
-.mx-plug.drop-after { box-shadow: 5px 0 0 var(--j-pink), 0 2px 0 var(--j-edge); }
+.mx-plug.drop-before { box-shadow: -5px 0 0 var(--j-accent), 0 2px 0 var(--j-edge); }
+.mx-plug.drop-after { box-shadow: 5px 0 0 var(--j-accent), 0 2px 0 var(--j-edge); }
 .mx-dot { width: 16px; height: 16px; flex-shrink: 0; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
 .mx-dot::before { content: ''; width: 12px; height: 12px; border-radius: 50%; background: var(--j-mint); border: 1.5px solid var(--j-edge); box-sizing: border-box; }
 .mx-plug.off .mx-dot::before { background: transparent; }

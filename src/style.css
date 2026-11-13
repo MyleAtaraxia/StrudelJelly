@@ -5,11 +5,13 @@
 @import '@fontsource/nunito/800.css';
 
 :root {
-  --j-ground: #FBE4E6;
-  --j-panel: #FFF8EC;
+  /* light: melon soda, from the mascot (lime and mint jelly, olive-cocoa ink) */
+  --j-ground: #E3F5D6;
+  --j-panel: #FBFDF3;
   --j-field: #FFFFFF;
-  --j-ink: #5C4037;
-  --j-soft: #7A5A4E;
+  --j-ink: #3E3A25;
+  --j-soft: #6A6446;
+  --j-accent: #D6F775; /* play button, cursor, drop markers */
   --j-pink: #F6B8C1;
   --j-lilac: #D3C4F3;
   --j-sky: #B9D6F5;
@@ -50,6 +52,7 @@
   --j-field: #1B161D;
   --j-ink: #FFF4E6;
   --j-soft: #C4B6BC;
+  --j-accent: #F6B8C1;
   --j-edge: #EFE2D3;
   --j-frame: #7D7076;
   --j-frame-w: 1.5px;
@@ -129,7 +132,7 @@ button, input { font: inherit; color: inherit; }
 .play-btn.loading .spinner { display: block; }
 .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid currentColor; border-right-color: transparent; animation: spin 700ms linear infinite; }
 .btn-sm { height: 36px; padding: 0 var(--sp-3); font-size: var(--fs-sm); }
-.btn-pink { background: var(--j-pink); }
+.btn-pink { background: var(--j-accent); }
 .btn-mint { background: var(--j-mint); }
 .btn-sky { background: var(--j-sky); }
 .btn-lilac { background: var(--j-lilac); }
@@ -256,10 +259,10 @@ button, input { font: inherit; color: inherit; }
 .status-vim { padding: 0 var(--sp-2); border-radius: var(--r-pill); border: 2px solid var(--j-edge); background: var(--j-sky); color: #2B2430; letter-spacing: .06em; line-height: 14px; }
 .status-vim[data-mode="insert"] { background: var(--j-mint); }
 .status-vim[data-mode="visual"] { background: var(--j-lilac); }
-.status-vim[data-mode="replace"] { background: var(--j-pink); }
+.status-vim[data-mode="replace"] { background: var(--j-accent); }
 /* Vim mode: block cursor and the : command line in jelly colours */
-#editor .cm-fat-cursor { background: var(--j-pink) !important; color: #2B2430 !important; border-radius: 2px; }
-#editor .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none !important; outline: 2px solid var(--j-pink) !important; color: transparent !important; }
+#editor .cm-fat-cursor { background: var(--j-accent) !important; color: #2B2430 !important; border-radius: 2px; }
+#editor .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none !important; outline: 2px solid var(--j-accent) !important; color: transparent !important; }
 #editor .cm-panels { background: var(--j-panel); color: var(--j-ink); border-top: var(--j-frame-w) solid var(--j-frame); }
 #editor .cm-vim-panel { font-family: "Cascadia Code", Consolas, monospace; padding: 2px var(--sp-3); }
 #editor .cm-vim-panel input { color: var(--j-ink); font-family: inherit; }

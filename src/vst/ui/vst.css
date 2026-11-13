@@ -74,7 +74,7 @@
   flex-shrink: 0; display: flex; align-items: center; gap: var(--sp-3); margin: var(--sp-2) var(--sp-3) 0; padding: 6px var(--sp-2) 6px var(--sp-3);
   border: 2px solid var(--j-edge); border-radius: var(--r-md); background: var(--j-butter); color: #2B2430; font-size: var(--fs-sm); font-weight: var(--fw-label);
 }
-.vst-banner[data-kind="quarantined"] { background: var(--j-pink); }
+.vst-banner[data-kind="quarantined"] { background: var(--j-accent); }
 .vst-banner small { font-weight: var(--fw-body); font-size: var(--fs-sm); opacity: .85; }
 .vst-banner .head-btn { margin-left: auto; flex-shrink: 0; height: 24px; color: #2B2430; }
 .vst-banner .vst-banner-text { min-width: 0; }
