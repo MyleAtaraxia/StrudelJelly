@@ -1,0 +1,83 @@
+# Builds the Windows app. On a version tag (v0.1.0, ...) it also makes a GitHub release with the zip and, when
+# itch.io is set up (BUTLER_API_KEY secret + ITCH_GAME variable, e.g. "yourname/strudel-jelly"), pushes it there.
+# Run it by hand (Actions > Release > Run workflow) to build without releasing; the zip is kept as an artifact.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          v=$(node -p "require('./package.json').version")
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME but package.json says $v"; exit 1; }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install Ninja
+        run: pip install ninja
+
+      # JUCE, FST and the ASIO SDK are downloaded by the first CMake run; keep them and the objects between runs
+      - uses: actions/cache@v4
+        with:
+          path: host/build
+          key: host-${{ hashFiles('host/CMakeLists.txt', 'host/build.mjs') }}-${{ hashFiles('host/src/**', 'host/vst2/**') }}
+          restore-keys: host-${{ hashFiles('host/CMakeLists.txt', 'host/build.mjs') }}-
+
+      - run: npm ci
+
+      - name: Build the audio engine and the 32-bit bridge
+        run: node host/build.mjs Release
+
+      - name: Package
+        run: npm run dist
+
+      - name: Zip
+        id: zip
+        shell: bash
+        run: |
+          printf '[[actions]]\nname = "play"\npath = "Strudel Jelly.exe"\n' > "release/win-unpacked/.itch.toml"
+          v=$(node -p "require('./package.json').version")
+          name="StrudelJelly-$v-win-x64.zip"
+          (cd release/win-unpacked && 7z a -tzip -mx=7 "../$name" . > /dev/null)
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.zip.outputs.name }}
+          path: release/${{ steps.zip.outputs.name }}
+          if-no-files-found: error
+
+      - name: GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "release/${{ steps.zip.outputs.name }}" --title "Strudel Jelly $GITHUB_REF_NAME" --generate-notes
+
+      - name: itch.io
+        if: startsWith(github.ref, 'refs/tags/v') && vars.ITCH_GAME != ''
+        shell: bash
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          curl -sSfL -o butler.zip https://broth.itch.zone/butler/windows-amd64/LATEST/archive/default
+          7z x butler.zip -obutler > /dev/null
+          ./butler/butler.exe push release/win-unpacked "${{ vars.ITCH_GAME }}:windows" --userversion "${{ steps.zip.outputs.version }}"
