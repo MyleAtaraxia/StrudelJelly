@@ -137,6 +137,22 @@ function renderCycle() {
   shownCycle = c;
   $('cycle').innerHTML = `cycle <b>${c}</b>`;
 }
+// the mascot dances while playing: its top sways left and right over two beats (skewed, so the base stays flat on
+// the ground), squashing as it leans and standing tallest upright. Driven by the scheduler's clock so it stays on
+// the beat when the tempo changes (4 beats per cycle, like the BPM)
+const mascot = document.querySelector('.logo-mascot');
+const calm = matchMedia('(prefers-reduced-motion: reduce)');
+function danceMascot() {
+  if (!mascot) return;
+  if (!started || calm.matches) {
+    if (mascot.style.transform) mascot.style.transform = '';
+    return;
+  }
+  const beats = Math.max(0, editor.repl.scheduler.now() * 4);
+  const sway = Math.sin(Math.PI * beats); // -1..1
+  const squash = sway * sway; // 0 upright, 1 at full lean: smooth, with the sway
+  mascot.style.transform = `skewX(${(9 * sway).toFixed(2)}deg) scale(${(1 + 0.06 * squash).toFixed(3)}, ${(1 - 0.08 * squash).toFixed(3)})`;
+}
 const renderCursor = () => {
   const { line, col } = cursorPos(editor);
   $('status-cursor').textContent = `Ln ${line}, Col ${col}`;
@@ -167,6 +183,7 @@ editor = createEditor({
   onFrame: () => {
     viz.frame();
     renderCycle();
+    danceMascot();
   },
   onUpdateState: (s) => {
     if (!!s.started === started) return;
@@ -177,6 +194,7 @@ editor = createEditor({
     tempoTimer = started ? setInterval(renderTempo, 400) : null;
     renderTempo();
     renderCycle();
+    danceMascot();
     renderTransport();
   },
 });
