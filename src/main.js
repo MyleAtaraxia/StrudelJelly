@@ -71,7 +71,7 @@ function applyTheme() {
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   editor?.reconfigureExtension('theme', dark ? 'jellyDark' : 'jellyLight');
   viz?.refreshColors();
-  jelly?.setTitlebar(dark ? '#141015' : '#E3F5D6', dark ? '#FFF4E6' : '#3E3A25');
+  jelly?.setTitlebar(dark ? '#12160F' : '#E3F5D6', dark ? '#F4F7E8' : '#3E3A25');
 }
 mq.addEventListener('change', applyTheme);
 document.querySelectorAll('[data-theme-choice]').forEach((b) =>

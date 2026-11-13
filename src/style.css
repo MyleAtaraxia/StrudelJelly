@@ -46,15 +46,16 @@
   color-scheme: light;
 }
 :root[data-theme="dark"] {
-  /* near-black plum with the light theme's pastels; cream sticker edges, thin dim frames around containers */
-  --j-ground: #141015;
-  --j-panel: #221B24;
-  --j-field: #1B161D;
-  --j-ink: #FFF4E6;
-  --j-soft: #C4B6BC;
-  --j-accent: #F6B8C1;
-  --j-edge: #EFE2D3;
-  --j-frame: #7D7076;
+  /* matcha night: olive-black and moss with the light theme's pastels and lime; cream sticker edges, thin dim
+     frames around containers */
+  --j-ground: #12160F;
+  --j-panel: #1C2218;
+  --j-field: #171C14;
+  --j-ink: #F4F7E8;
+  --j-soft: #B9BFA6;
+  --j-accent: #D6F775;
+  --j-edge: #E9EFD6;
+  --j-frame: #6F7860;
   --j-frame-w: 1.5px;
   color-scheme: dark;
 }
