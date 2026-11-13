@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite build && electron .",
     "build": "vite build",
+    "host:build": "node host/build.mjs",
     "dist": "vite build && electron-builder --win dir"
   },
   "license": "AGPL-3.0-or-later",
@@ -52,6 +53,12 @@
     },
     "asar": true,
     "electronDist": "node_modules/electron/dist",
-    "electronVersion": "45.1.0"
+    "electronVersion": "45.1.0",
+    "extraResources": [
+      {
+        "from": "host/bin/jelly-host.exe",
+        "to": "host/jelly-host.exe"
+      }
+    ]
   }
 }

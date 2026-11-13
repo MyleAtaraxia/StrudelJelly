@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { setupVst } = require('./vst/host.cjs');
 
 const ORIGIN = 'jelly://app';
 const DIST = path.join(__dirname, '..', 'dist');
@@ -205,7 +206,9 @@ function createWindow() {
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: bg(), symbolColor: ink(), height: 57 },
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
-    webPreferences: { preload: path.join(__dirname, 'preload.cjs') },
+    // The scheduler must keep time while the window is hidden. Chromium only exempts audible pages from timer
+    // throttling, and with the audio engine running the page itself is silent (jelly-host plays the sound).
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), backgroundThrottling: false },
   });
   win.removeMenu();
   win.loadURL(`${ORIGIN}/`);
@@ -446,6 +449,7 @@ app.whenReady().then(() => {
   serveApp();
   watchLibrary();
   watchSketches();
+  setupVst({ app, ipcMain, getWin: () => win });
   createWindow();
 });
 app.on('window-all-closed', () => app.quit());

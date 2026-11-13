@@ -10,6 +10,7 @@ import { EditorState, StateField, StateEffect, RangeSet, Prec } from '@codemirro
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import gm from '@strudel/soundfonts/gm.mjs';
+import { installCapture } from './vst/engine/capture.js';
 
 const DS = 'https://raw.githubusercontent.com/felixroos/dough-samples/main';
 const TS = 'https://raw.githubusercontent.com/todepond/samples/main';
@@ -171,6 +172,8 @@ const BASE_SETTINGS = {
 
 export function createEditor({ root, initialCode, onUpdateState, onEvalError, onEval, onFrame, settings }) {
   initAudioOnFirstClick();
+  // play through jelly-host when it runs (falls back to Chromium's output on its own)
+  installCapture().catch((e) => console.warn('[vst] capture', e));
   // StrudelMirror builds its EditorState internally; borrow its extension list so every sketch can get its own
   // state (and so its own undo history) with exactly the same setup.
   const create = EditorState.create;
