@@ -1,0 +1,103 @@
+/* Mixer pane (mx-): one card per rack entry. Cards are flat framed containers; plugin stickers and buttons keep
+   the sticker edge and drop shadow. Only global tokens are used. */
+.mx { font-size: var(--fs-sm); }
+.mx-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); }
+.mx-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.mx-notice { padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); border: 2px solid var(--j-edge); background: var(--j-butter); color: #2B2430; font-weight: var(--fw-label); }
+.mx-notice[data-kind="error"] { background: var(--j-red); }
+.mx-notice[data-kind="info"] { background: var(--j-sky); }
+
+.mx-card { border: var(--j-frame-w) solid var(--j-frame); border-radius: var(--r-lg); background: var(--j-field); padding: var(--sp-2) var(--sp-3) var(--sp-3); }
+.mx-head { display: flex; align-items: center; gap: var(--sp-2); min-height: 28px; }
+.mx-name {
+  max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 var(--sp-1); border: 0; border-radius: var(--r-sm); background: transparent; cursor: pointer;
+  font-family: "Cascadia Code", Consolas, monospace; font-weight: 700; font-size: var(--fs-md); color: var(--j-ink);
+}
+.mx-name:hover { background: var(--j-ground); }
+.mx-tag { padding: 0 6px; line-height: 16px; border: 1.5px solid var(--j-edge); border-radius: var(--r-pill); background: var(--j-oat); color: #2B2430; font-size: 10px; font-weight: var(--fw-label); }
+.mx-x {
+  width: 24px; height: 24px; flex-shrink: 0; display: grid; place-items: center; padding: 0; cursor: pointer;
+  border: 0; border-radius: 50%; background: transparent; color: var(--j-soft); opacity: 0; transition: opacity 120ms, background 120ms;
+}
+.mx-x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
+.mx-card:hover .mx-x, .mx-x:focus-visible { opacity: 1; }
+.mx-x:hover { background: var(--j-red); color: #2B2430; }
+
+.mx-chain { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); margin-top: var(--sp-2); }
+.mx-arr { color: var(--j-soft); font-weight: var(--fw-head); font-size: var(--fs-sm); }
+.mx-plug {
+  position: relative; display: inline-flex; align-items: center; gap: 5px; max-width: 100%; height: 26px; margin-bottom: 2px; padding: 0 var(--sp-2) 0 4px; cursor: pointer;
+  border: 2px solid var(--j-edge); border-radius: var(--r-pill); box-shadow: 0 2px 0 var(--j-edge); background: var(--j-panel);
+  font-weight: var(--fw-label); font-size: var(--fs-sm); transition: transform 220ms var(--j-ease), box-shadow 220ms var(--j-ease), background 160ms;
+}
+.mx-plug:hover { transform: translateY(-1px); box-shadow: 0 3px 0 var(--j-edge); }
+.mx-plug:active { transform: translateY(2px); box-shadow: none; transition-duration: 60ms; }
+.mx-pname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-plug.inst { background: var(--j-lilac); color: #2B2430; }
+.mx-plug.off { background: var(--j-oat); border-style: dashed; box-shadow: none; color: var(--j-soft); }
+.mx-plug.miss { background: var(--j-oat); border-style: dashed; color: #2B2430; }
+.mx-plug.crash { background: var(--j-red); color: #2B2430; }
+.mx-plug.dragging { opacity: .45; }
+.mx-plug.drop-before { box-shadow: -5px 0 0 var(--j-pink), 0 2px 0 var(--j-edge); }
+.mx-plug.drop-after { box-shadow: 5px 0 0 var(--j-pink), 0 2px 0 var(--j-edge); }
+.mx-dot { width: 16px; height: 16px; flex-shrink: 0; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
+.mx-dot::before { content: ''; width: 12px; height: 12px; border-radius: 50%; background: var(--j-mint); border: 1.5px solid var(--j-edge); box-sizing: border-box; }
+.mx-plug.off .mx-dot::before { background: transparent; }
+.mx-plug.miss .mx-dot::before { background: var(--j-butter); }
+.mx-plug.crash .mx-dot::before { background: var(--j-panel); }
+.mx-dest {
+  padding: 0 var(--sp-2); line-height: 20px; border: 1.5px dashed var(--j-frame); border-radius: var(--r-pill); background: transparent; color: var(--j-soft);
+  font-family: "Cascadia Code", Consolas, monospace; font-weight: 600; font-size: 11.5px;
+}
+.mx-dest.is-link { cursor: pointer; }
+.mx-dest.is-link:hover { background: var(--j-ground); color: var(--j-ink); }
+.mx-addp {
+  width: 24px; height: 24px; display: grid; place-items: center; padding: 0; cursor: pointer;
+  border: 1.5px dashed var(--j-frame); border-radius: 50%; background: transparent; color: var(--j-soft);
+}
+.mx-addp svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
+.mx-addp:hover { background: var(--j-mint); border-style: solid; border-color: var(--j-edge); color: #2B2430; }
+
+.mx-meter { margin-top: var(--sp-2); display: grid; gap: 2px; }
+.mx-meter i { display: block; height: 5px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--j-ink) 10%, transparent); }
+.mx-meter b { display: block; height: 100%; background: linear-gradient(90deg, var(--j-mint) 70%, var(--j-butter) 88%, var(--j-red)); clip-path: inset(0 calc(100% - var(--v, 0%)) 0 0); transition: clip-path 70ms linear; }
+.mx-from { margin-top: 6px; font-size: 11px; color: var(--j-soft); }
+.mx-feed { padding: 0; border: 0; background: transparent; cursor: pointer; color: var(--j-ink); font-family: "Cascadia Code", Consolas, monospace; font-weight: 600; font-size: 11px; }
+.mx-feed:hover { text-decoration: underline; }
+
+/* empty state */
+.mx-empty { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); border: var(--j-frame-w) dashed var(--j-frame); border-radius: var(--r-lg); }
+.mx-empty p { margin: 0; line-height: 1.45; }
+.mx-empty-title { font-size: var(--fs-md); }
+.mx-empty-note { color: var(--j-soft); font-size: var(--fs-xs); }
+.mx-code { margin: 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm); background: var(--j-ground); font-family: "Cascadia Code", Consolas, monospace; font-size: var(--fs-xs); line-height: 1.5; user-select: text; overflow-x: auto; }
+.mx-code b { color: var(--j-ink); font-weight: 700; }
+
+/* recently deleted */
+.mx-deleted { display: flex; flex-direction: column; gap: var(--sp-1); margin-top: var(--sp-2); }
+.mx-sec { height: 22px; padding: 0 var(--sp-1) 3px; display: flex; align-items: flex-end; border-bottom: 1px solid var(--j-frame); font-family: Fredoka, sans-serif; font-weight: var(--fw-label); font-size: var(--fs-xs); letter-spacing: .06em; text-transform: uppercase; color: var(--j-soft); }
+.mx-del { display: flex; align-items: center; gap: var(--sp-2); min-height: 34px; padding: 0 var(--sp-1); }
+.mx-del-name { font-family: "Cascadia Code", Consolas, monospace; font-weight: 600; }
+.mx-del-plugs { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--j-soft); font-size: var(--fs-xs); }
+
+/* plugin picker (a floating panel under its button) */
+.mx-picker {
+  position: fixed; z-index: 60; max-height: 340px; display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-2);
+  background: var(--j-panel); border: var(--j-frame-w) solid var(--j-frame); border-radius: var(--r-md); box-shadow: 0 3px 0 var(--j-frame);
+}
+.mx-picker-q {
+  flex-shrink: 0; height: 30px; padding: 0 var(--sp-3); border: var(--j-frame-w) solid var(--j-frame); border-radius: var(--r-pill); background: var(--j-field);
+  color: var(--j-ink); font-size: var(--fs-sm); outline: 0; user-select: text;
+}
+.mx-picker-q:focus { box-shadow: 0 0 0 3px var(--j-sky); }
+.mx-picker-list { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.mx-picker-row {
+  display: flex; align-items: center; gap: var(--sp-2); height: 30px; flex-shrink: 0; padding: 0 var(--sp-2); cursor: pointer;
+  border: 2px solid transparent; border-radius: var(--r-sm); background: transparent; color: var(--j-ink); text-align: left; font-size: var(--fs-sm);
+}
+.mx-picker-row:hover:not(.is-sel) { background: color-mix(in srgb, var(--j-ink) 5%, transparent); }
+.mx-picker-row.is-sel { background: var(--j-lilac); border-color: var(--j-edge); color: #2B2430; }
+.mx-picker-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: "Cascadia Code", Consolas, monospace; font-weight: 600; font-size: var(--fs-xs); }
+.mx-picker-vendor { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--j-soft); font-size: var(--fs-xs); }
+.mx-picker-row.is-sel .mx-picker-vendor { color: #2B2430; opacity: .75; }
+.mx-picker-none { padding: var(--sp-3); text-align: center; color: var(--j-soft); }

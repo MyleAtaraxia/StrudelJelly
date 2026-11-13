@@ -1,4 +1,5 @@
-import docs from 'virtual:strudel-docs';
+import baseDocs from 'virtual:strudel-docs';
+import { withVstDocs } from './vst-docs.js';
 import { syntaxTree } from '@codemirror/language';
 import { playExample, stopExample, playingExample, onExampleChange } from '../strudel.js';
 import './docs.css';
@@ -11,6 +12,7 @@ import './docs.css';
 // Contract with main.js: initDocs({ editor, container, showDocs, commands, sounds, sketches }) -> { open(name), palette }
 //   commands() -> [{ label, hint, run }]; sounds = { names(), insert(name) }; sketches = { list(), open(name) }
 
+const docs = withVstDocs(baseDocs);
 const ENTRIES = docs.entries;
 const byName = new Map(ENTRIES.map((e) => [e.name, e]));
 for (const e of ENTRIES) for (const s of e.synonyms) if (!byName.has(s)) byName.set(s, e);
@@ -97,6 +99,19 @@ function wordAt(state, pos) {
   return null;
 }
 
+// put a floating element next to a rect (below it, or above when it would not fit); shared with the VST hover card
+export function placeNear(el, rect, { above = false } = {}) {
+  el.style.left = '0px';
+  el.style.top = '0px';
+  const w = el.offsetWidth, ht = el.offsetHeight, pad = 8;
+  const x = Math.min(Math.max(pad, rect.left), innerWidth - w - pad);
+  let y = above ? rect.top - ht - 6 : rect.bottom + 6;
+  if (!above && y + ht > innerHeight - pad) y = rect.top - ht - 6;
+  if (above && y < pad) y = rect.bottom + 6;
+  el.style.left = `${x}px`;
+  el.style.top = `${Math.max(pad, y)}px`;
+}
+
 export function initDocs({ editor, container, showDocs, commands, sounds, sketches }) {
   const view = () => editor.editor;
 
@@ -174,12 +189,15 @@ export function initDocs({ editor, container, showDocs, commands, sounds, sketch
       const ex = h('div', 'dc-ex');
       ex.append(h('pre', 'dc-code', code));
       const btns = h('div', 'dc-ex-btns');
-      const play = button('head-btn btn-sky dc-play', '');
-      play._code = code;
-      play.addEventListener('click', () => toggleExample(code));
       const ins = button('head-btn btn-mint', ICON.plus + 'Insert', 'Add this example to your code, below the cursor line');
       ins.addEventListener('click', () => { insertExample(code); hideCard(); });
-      btns.append(play, ins);
+      if (e.noPlay) btns.append(ins); // needs plugins and a rack: only the sketch can run it
+      else {
+        const play = button('head-btn btn-sky dc-play', '');
+        play._code = code;
+        play.addEventListener('click', () => toggleExample(code));
+        btns.append(play, ins);
+      }
       const err = h('div', 'dc-ex-err');
       err.hidden = true;
       ex.append(btns, err);
@@ -288,17 +306,6 @@ export function initDocs({ editor, container, showDocs, commands, sounds, sketch
   let cardFor = null; // { name, from } the card is about
   let hoverTimer = 0;
   let hideTimer = 0;
-  function placeNear(el, rect, { above = false } = {}) {
-    el.style.left = '0px';
-    el.style.top = '0px';
-    const w = el.offsetWidth, ht = el.offsetHeight, pad = 8;
-    const x = Math.min(Math.max(pad, rect.left), innerWidth - w - pad);
-    let y = above ? rect.top - ht - 6 : rect.bottom + 6;
-    if (!above && y + ht > innerHeight - pad) y = rect.top - ht - 6;
-    if (above && y < pad) y = rect.bottom + 6;
-    el.style.left = `${x}px`;
-    el.style.top = `${Math.max(pad, y)}px`;
-  }
   function showCard(word) {
     const e = lookup(word.name);
     if (!e) return false;
