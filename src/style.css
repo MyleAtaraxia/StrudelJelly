@@ -92,7 +92,9 @@ button, input { font: inherit; color: inherit; }
 body:not([data-state="playing"]) .logo-mascot { transition: transform 240ms var(--j-ease); /* settles back when stopped */ }
 /* the pane switch matches the transport pill's 45px height so both sit at the same offset from the top */
 .titlebar .segmented button { height: 41px; }
-.titlebar-right { margin-right: 150px; /* window controls */ }
+/* clear the window controls (the title bar overlay) by the same gap as the mascot has from the left edge: the .app
+   padding already gives that gap, so the margin is just the overlay's width */
+.titlebar-right { margin-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 137px))); }
 
 /* transport pill: play, tempo, cycle counter */
 .transport {
@@ -346,7 +348,6 @@ body:not([data-state="playing"]) .logo-mascot { transition: transform 240ms var(
 @media (max-width: 900px) {
   .workspace { grid-template-columns: minmax(0, 1fr) 264px; }
   .readout { display: none; }
-  .titlebar-right { margin-right: 140px; }
 }
 
 /* ---------- scrollbars: slim inset capsules everywhere ---------- */
