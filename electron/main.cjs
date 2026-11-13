@@ -4,6 +4,7 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { setupVst } = require('./vst/host.cjs');
+const { setupExport } = require('./export.cjs');
 
 const ORIGIN = 'jelly://app';
 const DIST = path.join(__dirname, '..', 'dist');
@@ -461,6 +462,7 @@ app.whenReady().then(() => {
   serveApp();
   watchLibrary();
   watchSketches();
+  setupExport({ app, ipcMain, getWin: () => win });
   vst = setupVst({ app, ipcMain, getWin: () => win, sketchesDir: SKETCHES });
   createWindow();
 });

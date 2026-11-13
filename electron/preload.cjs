@@ -29,6 +29,11 @@ const vst = {
   onMeters: on('vst:meters'),
   onScope: on('vst:scope'), // { key, data: base64 16-bit samples }
   _scopes: (keys) => ipcRenderer.send('vst:scopes', keys), // node key -> samples per snapshot
+  // audio export (src/record.js): the host records the final mix between two AudioContext frames; stop asks where to
+  // save and returns the path, or null if cancelled (or discarded)
+  recordStart: (from) => ipcRenderer.invoke('vst:recordStart', from),
+  recordEnd: (to) => ipcRenderer.invoke('vst:recordEnd', to),
+  recordStop: (name, discard = false) => ipcRenderer.invoke('vst:recordStop', name, discard),
   audioDevices: () => ipcRenderer.invoke('vst:audioDevices'),
   audioSettings: () => ipcRenderer.invoke('vst:audioSettings'),
   setAudio: (s) => ipcRenderer.invoke('vst:setAudio', s),
@@ -69,6 +74,9 @@ contextBridge.exposeInMainWorld('jelly', {
   soundRename: (name, newName) => ipcRenderer.invoke('sound:rename', name, newName),
   soundDelete: (name) => ipcRenderer.invoke('sound:delete', name),
   soundReveal: (name) => ipcRenderer.invoke('sound:reveal', name),
+  // audio export without the engine: save WAV bytes made in the page (src/record.js)
+  saveRecording: (name, bytes) => ipcRenderer.invoke('record:save', name, bytes),
+  revealRecording: (file) => ipcRenderer.invoke('record:reveal', file),
   setTitlebar: (color, symbolColor) => ipcRenderer.invoke('theme:titlebar', color, symbolColor),
   vst,
 });

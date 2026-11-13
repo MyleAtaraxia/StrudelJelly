@@ -75,6 +75,54 @@ void Engine::render(float* const* out, int numOut, int n) {
   }
 }
 
+void Engine::writeRecording(float* const* out, int n, double src, double ratio, bool valid, int delay) {
+  const juce::SpinLock::ScopedTryLockType lock(recorderLock);
+  if (!lock.isLocked() || writing == nullptr) return;
+  const double from = recFrom.load(std::memory_order_relaxed), to = recTo.load(std::memory_order_relaxed);
+  auto at = [&](double F) {
+    if (F <= -kOpen) return 0;
+    if (F >= kOpen) return n;
+    if (!valid) return F < src ? 0 : n; // no clock yet: all or nothing
+    return juce::jlimit(0, n, (int) std::ceil(sourceToBlockOffset(F, src, ratio) + delay));
+  };
+  const int a = at(from), b = at(to);
+  if (b <= a) return;
+  const float* in[2] = { out[0] + a, out[1] + a };
+  if (writing->write(in, b - a)) recorded += b - a; // false only if the writer's buffer is full (the disk is far behind)
+}
+
+juce::String Engine::startRecording(const juce::File& file, double from) {
+  stopRecording();
+  file.deleteFile();
+  std::unique_ptr<juce::OutputStream> os = std::make_unique<juce::FileOutputStream>(file);
+  if (static_cast<juce::FileOutputStream*>(os.get())->failedToOpen()) return "could not write " + file.getFullPathName();
+  juce::WavAudioFormat wav;
+  const auto opts = juce::AudioFormatWriterOptions{}.withSampleRate(rate).withNumChannels(2).withBitsPerSample(24);
+  auto w = wav.createWriterFor(os, opts);
+  if (w == nullptr) return "could not write " + file.getFullPathName();
+  writerThread.startThread();
+  // ~10 s of slack before blocks are dropped
+  recorder = std::make_unique<juce::AudioFormatWriter::ThreadedWriter>(w.release(), writerThread, (int) (rate * 10));
+  const juce::SpinLock::ScopedLockType lock(recorderLock);
+  recorded = 0;
+  recFrom.store(from);
+  recTo.store(kOpen);
+  writing = recorder.get();
+  return {};
+}
+
+double Engine::stopRecording() {
+  int64_t frames = 0;
+  {
+    const juce::SpinLock::ScopedLockType lock(recorderLock);
+    if (writing == nullptr) return 0;
+    writing = nullptr;
+    frames = recorded;
+  }
+  recorder.reset(); // flushes what is left and closes the file
+  return (double) frames / rate;
+}
+
 void Engine::dispatch(Plan& p, int n, double src, double ratio, bool valid) {
   // drain the FIFO
   const auto rd = fifo.read(fifo.getNumReady());
@@ -198,9 +246,11 @@ void Engine::renderChunk(float* const* out, int n) {
   const double src = s0.readPos();
   const double ratio = s0.currentRatio() > 0 ? s0.currentRatio() : 1.0;
 
+  int delay0 = 0; // stream 0's delay: the rack's latency, which everything played is aligned to
   {
     const juce::SpinLock::ScopedLockType lock(planLock);
     Plan* p = plan.get();
+    if (p != nullptr) delay0 = p->lmax;
     if (p != nullptr) dispatch(*p, n, src, ratio, was);
     else {
       // no rack: nothing to play the events
@@ -240,6 +290,8 @@ void Engine::renderChunk(float* const* out, int n) {
       if (recPos >= (int) rec[0].size()) recOn.store(false);
     }
   }
+
+  writeRecording(out, n, src, ratio, was, delay0);
 
   // the clock reference is where stream 0 read from at the start of this block
   refSeq.fetch_add(1, std::memory_order_acq_rel); // odd: writing

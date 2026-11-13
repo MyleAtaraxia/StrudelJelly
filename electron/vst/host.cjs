@@ -9,6 +9,7 @@ const path = require('node:path');
 const { encodeJson, Decoder } = require('./protocol.cjs');
 const { Scanner } = require('./scanner.cjs');
 const { RackManager } = require('./rack.cjs');
+const { askWavPath, moveFile } = require('../export.cjs');
 
 const EXE = process.platform === 'win32' ? 'jelly-host.exe' : 'jelly-host';
 const HELLO_TIMEOUT = 5000;
@@ -280,6 +281,36 @@ function setupVst({ app, ipcMain, getWin, sketchesDir }) {
     await host.setAudio(s && typeof s === 'object' ? s : {});
   });
   ipcMain.handle('vst:setStreamLatency', (_, ms) => host.request('setStreamLatency', { ms: Number(ms) }).catch(() => false));
+  // Export audio (src/record.js): the host writes the final mix to a temp WAV, moved where the user picks on stop.
+  // from / to are AudioContext frames: only the audio between them is written (see Engine::startRecording)
+  let recording = null;
+  ipcMain.handle('vst:recordStart', async (_, from) => {
+    if (recording) await host.request('recordStop').catch(() => {});
+    const file = path.join(app.getPath('temp'), `strudel-jelly-${process.pid}-${Date.now()}.wav`);
+    await host.request('recordStart', Number.isFinite(from) ? { path: file, from } : { path: file });
+    recording = file;
+    return true;
+  });
+  ipcMain.handle('vst:recordEnd', (_, to) => Number.isFinite(to) && host.request('recordEnd', { to }));
+  ipcMain.handle('vst:recordStop', async (_, name, discard) => {
+    const file = recording;
+    recording = null;
+    if (!file) return null;
+    const seconds = await host.request('recordStop').catch(() => 0);
+    if (discard || !(seconds > 0) || !fs.existsSync(file)) {
+      fs.rm(file, { force: true }, () => {});
+      if (discard) return null;
+      throw new Error('nothing was recorded');
+    }
+    const to = await askWavPath(getWin(), app, name).catch(() => null);
+    if (!to) {
+      fs.rm(file, { force: true }, () => {});
+      return null;
+    }
+    await moveFile(file, to);
+    return to;
+  });
+  app.on('will-quit', () => recording && fs.rm(recording, { force: true }, () => {}));
   // the capture worklet's port: every message is an ArrayBuffer of AUDIO frames
   ipcMain.on('vst:capture', (e) => {
     const port = e.ports[0];

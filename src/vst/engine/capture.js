@@ -98,6 +98,8 @@ export function setActiveStreams(m) {
   node?.port.postMessage({ type: 'streams', mask });
 }
 export const captureMode = () => (host ? 'host' : 'local');
+// What Chromium plays in local mode: the main mix and the routes that play dry (audio export records these then)
+export const localOutputs = () => (tap ? [tap, ...inputs.slice(1)] : []);
 
 // diagnostics (devtools, tests)
 globalThis.__jellyVstCapture = { mode: captureMode, ctx: () => ac };

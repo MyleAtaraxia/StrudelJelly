@@ -7,6 +7,7 @@ import { initDocs } from './docs/index.js';
 import { initVstUi } from './vst/ui/index.js';
 import { initShell } from './vst/ui/shell.js';
 import { initMixer } from './mixer/index.js';
+import { initExport } from './record.js';
 import { getCM } from '@replit/codemirror-vim';
 
 const $ = (id) => document.getElementById(id);
@@ -111,6 +112,7 @@ const playBtn = $('play');
 let loaded = false;
 let started = false;
 let evalError = null;
+let exporter = null; // the Export pane, below
 let tempoTimer = null;
 
 const num = (n) => String(Math.round(n * 10) / 10);
@@ -118,6 +120,7 @@ function renderTransport() {
   const state = !loaded ? 'loading' : evalError ? 'error' : started ? 'playing' : 'ready';
   document.body.dataset.state = state;
   playBtn.disabled = !loaded;
+  exporter?.render();
   playBtn.classList.toggle('loading', !loaded);
   playBtn.classList.toggle('is-playing', started);
   $('play-label').textContent = started ? 'Stop' : 'Play';
@@ -190,6 +193,7 @@ editor = createEditor({
     started = !!s.started;
     if (started) stopExample(); // one thing plays at a time
     viz?.setPlaying(started);
+    exporter?.onPlaying(started);
     clearInterval(tempoTimer);
     tempoTimer = started ? setInterval(renderTempo, 400) : null;
     renderTempo();
@@ -371,6 +375,16 @@ const sketches = createSketches({
     el.textContent = { saved: 'Saved', edited: 'Edited', error: 'Save failed' }[st];
   },
 });
+
+// ---------- export audio (the Export pane) ----------
+exporter = initExport({
+  container: $('pane-export'), editor, jelly, store,
+  isLoaded: () => loaded,
+  isPlaying: () => started,
+  stop: () => editor.stop(),
+  play: () => { stopExample(); evaluate(); },
+  getName: () => sketches.current() || 'recording',
+});
 nameBtn.addEventListener('click', () => showPane('sketches'));
 nameBtn.addEventListener('dblclick', () => {
   const input = document.createElement('input');
@@ -453,6 +467,8 @@ function showPane(name) {
   $('pane-settings').hidden = name !== 'settings';
   $('pane-docs').hidden = name !== 'docs';
   $('pane-mixer').hidden = name !== 'mixer';
+  $('pane-export').hidden = name !== 'export';
+  if (name === 'export') exporter?.render();
   if (name === 'settings') refreshOffline();
   if (name === 'sketches') sketches.refresh();
   if (name === 'mixer') mixer?.refresh();

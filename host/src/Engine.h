@@ -31,6 +31,7 @@
 #include "Plugin.h"
 #include "Protocol.h"
 #include "StreamInput.h"
+#include <juce_audio_formats/juce_audio_formats.h>
 #include <array>
 #include <atomic>
 #include <memory>
@@ -143,6 +144,25 @@ private:
   juce::AbstractFifo fifo { 1 << 14 };
   std::vector<Event> ring = std::vector<Event>(1 << 14);
   std::vector<Event> pending; // audio thread only
+
+public:
+  // Message thread: write the final stereo mix (what the speakers get) to a 24-bit WAV file until stopRecording.
+  // Only audio inside the window [from, to) is written. Both ends are AudioContext frames, mapped to the output the
+  // same way events are (stream 0's clock plus the rack's latency), so an export starts and ends on the exact sample
+  // where a cycle does. The audio thread hands blocks to a background writer, so it never touches the disk.
+  static constexpr double kOpen = 1e300;
+  juce::String startRecording(const juce::File& file, double from = -kOpen);
+  void setRecordingEnd(double to) { recTo.store(to); }
+  double stopRecording(); // seconds written; 0 when not recording
+
+private:
+  juce::TimeSliceThread writerThread { "jelly-record" };
+  std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> recorder; // message thread
+  juce::SpinLock recorderLock;                                        // guards `writing` against the audio thread
+  juce::AudioFormatWriter::ThreadedWriter* writing = nullptr;
+  int64_t recorded = 0; // frames, under recorderLock
+  std::atomic<double> recFrom { -kOpen }, recTo { kOpen };
+  void writeRecording(float* const* out, int n, double src, double ratio, bool valid, int delay);
 
 public:
   // tests (JELLY_HOST_DEBUG): record the output for a while, split into what superdough streams send to the

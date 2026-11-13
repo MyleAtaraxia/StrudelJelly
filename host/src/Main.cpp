@@ -168,6 +168,13 @@ private:
     else if (cmd == "paramValues") result = rack->paramValues(msg["group"].toString(), (int) msg["slot"]);
     else if (cmd == "params") result = rack->params(msg["group"].toString(), (int) msg["slot"]);
     else if (cmd == "openEditor") { error = rack->openEditor(msg["group"].toString(), (int) msg["slot"]); result = error.isEmpty(); }
+    else if (cmd == "recordStart") {
+      const juce::var from = msg["from"];
+      error = engine.startRecording(juce::File(msg["path"].toString()), from.isVoid() ? -Engine::kOpen : (double) from);
+      result = error.isEmpty();
+    }
+    else if (cmd == "recordEnd") { engine.setRecordingEnd((double) msg["to"]); result = true; }
+    else if (cmd == "recordStop") result = engine.stopRecording();
     else if (cmd == "debugRecord" && debug) { engine.debugRecord((int) ((double) msg["seconds"] * engine.sampleRate())); result = true; }
     else if (cmd == "debugRecordGet" && debug) {
       if (engine.debugRecording()) error = "still recording";
