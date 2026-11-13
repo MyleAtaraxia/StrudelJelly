@@ -458,7 +458,21 @@ document.querySelectorAll('[data-setting]').forEach((box) => {
 // ---------- sounds sidebar ----------
 const workspace = document.querySelector('.workspace');
 let pane = null;
+// sounds and the mixer share the Sounds pane; 'mixer' opens it on the mixer
+let soundsView = store.get('jelly-sounds-view', 'library') === 'mixer' && jelly.vst ? 'mixer' : 'library';
+function showSoundsView(v) {
+  soundsView = v;
+  $('pane-library').hidden = v !== 'library';
+  $('pane-mixer').hidden = v !== 'mixer';
+  document.querySelectorAll('[data-sounds-view]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.soundsView === v)));
+  if (v === 'mixer' && pane === 'sounds') mixer?.refresh();
+  store.set('jelly-sounds-view', v);
+}
 function showPane(name) {
+  if (name === 'mixer') {
+    showSoundsView('mixer');
+    name = 'sounds';
+  }
   pane = name;
   workspace.classList.toggle('no-sidebar', !name);
   document.querySelectorAll('[data-pane]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pane === name)));
@@ -466,20 +480,34 @@ function showPane(name) {
   $('pane-sounds-wrap').hidden = name !== 'sounds';
   $('pane-settings').hidden = name !== 'settings';
   $('pane-docs').hidden = name !== 'docs';
-  $('pane-mixer').hidden = name !== 'mixer';
   $('pane-export').hidden = name !== 'export';
   if (name === 'export') exporter?.render();
   if (name === 'settings') refreshOffline();
   if (name === 'sketches') sketches.refresh();
-  if (name === 'mixer') mixer?.refresh();
+  if (name === 'sounds' && soundsView === 'mixer') mixer?.refresh();
   store.set('jelly-pane', name || '');
 }
-if (!jelly.vst) document.querySelector('[data-pane=mixer]').hidden = true;
 document.querySelectorAll('[data-pane]').forEach((b) =>
   b.addEventListener('click', () => showPane(pane === b.dataset.pane ? null : b.dataset.pane)),
 );
 
 mixer = initMixer({ editor, container: $('pane-mixer'), showSettings: () => showPane('settings') });
+// the Sounds / Mixer switch takes the place of each head's title (only with the engine; the web build has no mixer)
+if (jelly.vst) {
+  for (const head of [$('pane-library'), $('pane-mixer')].map((p) => p.querySelector('.panel-head'))) {
+    const sw = document.createElement('div');
+    sw.className = 'segmented head-switch';
+    sw.setAttribute('role', 'group');
+    sw.setAttribute('aria-label', 'Sounds or mixer');
+    sw.innerHTML = '<button type="button" data-sounds-view="library" data-testid="view-sounds">Sounds</button><button type="button" data-sounds-view="mixer" data-testid="view-mixer">Mixer</button>';
+    sw.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-sounds-view]');
+      if (b) showSoundsView(b.dataset.soundsView);
+    });
+    head.querySelector('.panel-title').replaceWith(sw);
+  }
+}
+showSoundsView(soundsView);
 const vstShell = initShell({
   getKnobs: () => prefs.vstKnobsUpdateCode,
   setKnobs: (on) => { prefs.vstKnobsUpdateCode = on; savePrefs(); },

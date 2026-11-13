@@ -81,7 +81,8 @@ button, input { font: inherit; color: inherit; }
 /* ---------- title bar ---------- */
 .titlebar {
   -webkit-app-region: drag;
-  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--sp-4); padding-top: var(--sp-3);
+  /* space-between: the transport sits midway between the title and the pane switch (not the window centre) */
+  display: flex; justify-content: space-between; align-items: center; gap: var(--sp-4); padding-top: var(--sp-3);
 }
 .titlebar button, .titlebar input { -webkit-app-region: no-drag; }
 .brand { display: flex; align-items: center; gap: var(--sp-2); }
@@ -91,7 +92,7 @@ button, input { font: inherit; color: inherit; }
 body:not([data-state="playing"]) .logo-mascot { transition: transform 240ms var(--j-ease); /* settles back when stopped */ }
 /* the pane switch matches the transport pill's 45px height so both sit at the same offset from the top */
 .titlebar .segmented button { height: 41px; }
-.titlebar-right { justify-self: end; margin-right: 150px; /* window controls */ }
+.titlebar-right { margin-right: 150px; /* window controls */ }
 
 /* transport pill: play, tempo, cycle counter */
 .transport {
@@ -175,6 +176,7 @@ body:not([data-state="playing"]) .logo-mascot { transition: transform 240ms var(
   border-bottom: var(--j-frame-w) solid var(--j-frame);
 }
 .panel-title { font-weight: var(--fw-label); font-size: var(--fs-md); padding: 0 var(--sp-1); }
+.head-switch button { height: 26px; padding: 0 var(--sp-3); }
 .head-spacer { flex: 1; }
 .head-group { display: flex; align-items: center; gap: var(--sp-2); }
 .head-btn {

@@ -33,14 +33,11 @@
         <button type="button" data-pane="sketches" data-testid="pane-sketches" aria-label="Sketches" title="Sketches" aria-pressed="false">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6zM14 3v5h5M9 13h7M9 17h5"></path></svg>
         </button>
-        <button type="button" data-pane="sounds" data-testid="pane-sounds" aria-label="Sounds" title="Sounds" aria-pressed="true">
+        <button type="button" data-pane="sounds" data-testid="pane-sounds" aria-label="Sounds" title="Sounds and mixer" aria-pressed="true">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM19 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"></path></svg>
         </button>
         <button type="button" data-pane="docs" data-testid="pane-docs" aria-label="Docs" title="Docs (F1 on a function, Ctrl+K searches everything)" aria-pressed="false">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5zM12 6.5v13"></path></svg>
-        </button>
-        <button type="button" data-pane="mixer" data-testid="pane-mixer" aria-label="Mixer" title="Mixer: your VST plugins" aria-pressed="false">
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4v16M12 4v16M18 4v16"></path><rect x="3.5" y="12" width="5" height="3" rx="1.2" fill="currentColor"></rect><rect x="9.5" y="7" width="5" height="3" rx="1.2" fill="currentColor"></rect><rect x="15.5" y="14" width="5" height="3" rx="1.2" fill="currentColor"></rect></svg>
         </button>
         <button type="button" data-pane="export" data-testid="pane-export" aria-label="Export" title="Export audio" aria-pressed="false">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19h14"></path></svg>
@@ -101,13 +98,16 @@
 
     <aside class="panel sidebar" id="sidebar">
       <div class="pane pane-sketches" id="pane-sketches" aria-label="Sketches" hidden></div>
+      <!-- sounds and the mixer share one pane; the switch in its head (main.js) picks which shows -->
       <div class="pane" id="pane-sounds-wrap" aria-label="Sounds">
-        <div class="panel-head"><span class="panel-title">Sounds</span></div>
-        <div class="pane-body" id="pane-sounds"></div>
+        <div class="pane" id="pane-library">
+          <div class="panel-head"><span class="panel-title">Sounds</span></div>
+          <div class="pane-body" id="pane-sounds"></div>
+        </div>
+        <div class="pane pane-mixer" id="pane-mixer" aria-label="Mixer" hidden></div>
       </div>
 
       <div class="pane pane-docs" id="pane-docs" aria-label="Docs" hidden></div>
-      <div class="pane pane-mixer" id="pane-mixer" aria-label="Mixer" hidden></div>
       <div class="pane pane-export" id="pane-export" aria-label="Export" hidden></div>
 
       <div class="pane pane-settings" id="pane-settings" aria-label="Settings" hidden>
