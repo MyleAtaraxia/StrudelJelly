@@ -1,4 +1,4 @@
-# Builds the Windows app. On a version tag (v0.1.0, ...) it also makes a GitHub release with the zip and, when
+# Builds the Windows app. On a version tag (v0.3.0, ...), which also sets the app's version, it also makes a GitHub release with the zip and, when
 # itch.io is set up (BUTLER_API_KEY secret + ITCH_GAME variable, e.g. "yourname/strudel-jelly"), pushes it there.
 # Run it by hand (Actions > Release > Run workflow) to build without releasing; the zip is kept as an artifact.
 name: Release
@@ -18,13 +18,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check the tag matches package.json
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        run: |
-          v=$(node -p "require('./package.json').version")
-          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME but package.json says $v"; exit 1; }
-
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -41,6 +34,12 @@ jobs:
           restore-keys: host-${{ hashFiles('host/CMakeLists.txt', 'host/build.mjs') }}-
 
       - run: npm ci
+
+      # a version tag sets the app's version (package.json is not bumped by hand)
+      - name: Version from the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
 
       - name: Build the audio engine and the 32-bit bridge
         run: node host/build.mjs Release
