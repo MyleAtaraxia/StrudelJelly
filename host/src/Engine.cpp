@@ -66,6 +66,8 @@ void Engine::render(float* const* out, int numOut, int n) {
   for (int c = 0; c < numOut; ++c)
     if (out[c] != nullptr) std::memset(out[c], 0, sizeof(float) * (size_t) n);
   if (numOut < 1 || out[0] == nullptr) return;
+  const juce::ScopedTryLock drive(driveLock); // an export is rendering: silence
+  if (!drive.isLocked()) return;
   float* stereo[2] = { out[0], numOut > 1 && out[1] != nullptr ? out[1] : out[0] };
   for (int done = 0; done < n;) {
     const int len = std::min(n - done, Inst::kMaxBlock);
@@ -75,52 +77,94 @@ void Engine::render(float* const* out, int numOut, int n) {
   }
 }
 
-void Engine::writeRecording(float* const* out, int n, double src, double ratio, bool valid, int delay) {
-  const juce::SpinLock::ScopedTryLockType lock(recorderLock);
-  if (!lock.isLocked() || writing == nullptr) return;
-  const double from = recFrom.load(std::memory_order_relaxed), to = recTo.load(std::memory_order_relaxed);
-  auto at = [&](double F) {
-    if (F <= -kOpen) return 0;
-    if (F >= kOpen) return n;
-    if (!valid) return F < src ? 0 : n; // no clock yet: all or nothing
-    return juce::jlimit(0, n, (int) std::ceil(sourceToBlockOffset(F, src, ratio) + delay));
-  };
-  const int a = at(from), b = at(to);
-  if (b <= a) return;
-  const float* in[2] = { out[0] + a, out[1] + a };
-  if (writing->write(in, b - a)) recorded += b - a; // false only if the writer's buffer is full (the disk is far behind)
-}
-
-juce::String Engine::startRecording(const juce::File& file, double from) {
-  stopRecording();
-  file.deleteFile();
-  std::unique_ptr<juce::OutputStream> os = std::make_unique<juce::FileOutputStream>(file);
-  if (static_cast<juce::FileOutputStream*>(os.get())->failedToOpen()) return "could not write " + file.getFullPathName();
-  juce::WavAudioFormat wav;
-  const auto opts = juce::AudioFormatWriterOptions{}.withSampleRate(rate).withNumChannels(2).withBitsPerSample(24);
-  auto w = wav.createWriterFor(os, opts);
-  if (w == nullptr) return "could not write " + file.getFullPathName();
-  writerThread.startThread();
-  // ~10 s of slack before blocks are dropped
-  recorder = std::make_unique<juce::AudioFormatWriter::ThreadedWriter>(w.release(), writerThread, (int) (rate * 10));
-  const juce::SpinLock::ScopedLockType lock(recorderLock);
-  recorded = 0;
-  recFrom.store(from);
-  recTo.store(kOpen);
-  writing = recorder.get();
-  return {};
-}
-
-double Engine::stopRecording() {
-  int64_t frames = 0;
-  {
-    const juce::SpinLock::ScopedLockType lock(recorderLock);
-    if (writing == nullptr) return 0;
-    writing = nullptr;
-    frames = recorded;
+void Engine::readOffline(int stream, float* const* out, int n, double src, double ratio) {
+  const auto& l = offline->audio[(size_t) stream * 2];
+  const auto& r = offline->audio[(size_t) stream * 2 + 1];
+  if (l.empty()) return;
+  const int64_t len = (int64_t) std::min(l.size(), r.size());
+  for (int k = 0; k < n; ++k) {
+    const double pos = src + k * ratio;
+    const auto i = (int64_t) std::floor(pos);
+    if (i < 0 || i >= len) continue;
+    const float f = (float) (pos - (double) i);
+    const auto j = (size_t) std::min(i + 1, len - 1);
+    out[0][k] += l[(size_t) i] + (l[j] - l[(size_t) i]) * f;
+    out[1][k] += r[(size_t) i] + (r[j] - r[(size_t) i]) * f;
   }
-  recorder.reset(); // flushes what is left and closes the file
-  return (double) frames / rate;
+}
+
+// silence every node: no queued events, empty delay lines and buffers, synths told all notes off (resetPlugins clears tails)
+void Engine::resetGraph(Plan& p) {
+  const auto rd = fifo.read(fifo.getNumReady());
+  (void) rd;
+  pending.clear();
+  for (auto& d : delays) d.clear();
+  for (auto& node : p.nodes) {
+    node.in.clear();
+    node.midi.clear();
+    node.numChanges = 0;
+    if (node.synth) {
+      node.midi.addEvent(juce::MidiMessage::allNotesOff(1), 0);
+      node.midi.addEvent(juce::MidiMessage::allSoundOff(1), 0);
+    }
+  }
+}
+
+void Engine::resetPlugins() {
+  // VST3 plugins take reset (setActive) on the message thread only, and never while they process
+  const juce::ScopedLock drive(driveLock);
+  const juce::SpinLock::ScopedLockType lock(planLock);
+  if (!plan) return;
+  for (auto& node : plan->nodes)
+    for (auto& ps : node.slots)
+      if (ps.inst != nullptr && !ps.inst->crashed.load()) ps.inst->plugin().reset();
+}
+
+juce::String Engine::renderOffline(OfflineJob& job, juce::AudioFormatWriter& w, const std::function<bool(double)>& progress) {
+  const juce::ScopedLock drive(driveLock);
+  int skip = 0; // the rack's latency: everything reaches the output this late
+  {
+    const juce::SpinLock::ScopedLockType lock(planLock);
+    if (plan) {
+      skip = plan->lmax;
+      resetGraph(*plan);
+    }
+  }
+  offline = &job;
+  offEvent = 0;
+  offSrc = 0;
+  offRatio = job.srcRate / rate;
+  const int64_t total = (int64_t) std::ceil((double) job.frames / offRatio) + skip;
+  juce::AudioBuffer<float> buf(2, Inst::kMaxBlock);
+  juce::String err;
+  auto last = juce::Time::getMillisecondCounter();
+  for (int64_t done = 0; done < total;) {
+    const int n = (int) std::min<int64_t>(Inst::kMaxBlock, total - done);
+    buf.clear();
+    float* part[2] = { buf.getWritePointer(0), buf.getWritePointer(1) };
+    renderChunk(part, n);
+    const int a = (int) juce::jlimit<int64_t>(0, n, skip - done);
+    if (n > a) {
+      const float* in[2] = { part[0] + a, part[1] + a };
+      if (!w.writeFromFloatArrays(in, 2, n - a)) {
+        err = "could not write the file";
+        break;
+      }
+    }
+    done += n;
+    const auto now = juce::Time::getMillisecondCounter();
+    if (progress && now - last >= 100) {
+      last = now;
+      if (!progress((double) done / (double) total)) {
+        err = "cancelled";
+        break;
+      }
+    }
+  }
+  offline = nullptr;
+  const juce::SpinLock::ScopedLockType lock(planLock);
+  if (plan) resetGraph(*plan);
+  return err;
 }
 
 void Engine::dispatch(Plan& p, int n, double src, double ratio, bool valid) {
@@ -242,15 +286,16 @@ void Engine::debugRecord(int frames) {
 void Engine::renderChunk(float* const* out, int n) {
   const int64_t h = samples.load(std::memory_order_relaxed);
   StreamInput& s0 = *streams[0];
-  const bool was = s0.isPlaying();
-  const double src = s0.readPos();
-  const double ratio = s0.currentRatio() > 0 ? s0.currentRatio() : 1.0;
+  const bool off = offline != nullptr; // an export: streams and events come from the job, on its own clock
+  const bool was = off || s0.isPlaying();
+  const double src = off ? offSrc : s0.readPos();
+  const double ratio = off ? offRatio : s0.currentRatio() > 0 ? s0.currentRatio() : 1.0;
+  if (off) // the job's events up to the end of this block (later ones wait in `pending` like live ones)
+    for (auto& ev = offline->events; offEvent < ev.size() && ev[offEvent].src < src + n * ratio; ++offEvent) pending.push_back(ev[offEvent]);
 
-  int delay0 = 0; // stream 0's delay: the rack's latency, which everything played is aligned to
   {
     const juce::SpinLock::ScopedLockType lock(planLock);
     Plan* p = plan.get();
-    if (p != nullptr) delay0 = p->lmax;
     if (p != nullptr) dispatch(*p, n, src, ratio, was);
     else {
       // no rack: nothing to play the events
@@ -262,7 +307,8 @@ void Engine::renderChunk(float* const* out, int n) {
       auto& st = *streams[(size_t) i];
       scratch.clear(0, n);
       float* sc[2] = { scratch.getWritePointer(0), scratch.getWritePointer(1) };
-      st.render(sc, n, h);
+      if (off) readOffline(i, sc, n, src, ratio);
+      else st.render(sc, n, h);
       const int node = p != nullptr ? p->streamNode[(size_t) i] : -1;
       const int delay = p == nullptr ? 0 : node >= 0 ? p->streamDelay[(size_t) i] : p->lmax;
       if (p != nullptr && (i == 0 || node >= 0 || delay > 0)) delays[(size_t) i].process(sc[0], sc[1], n, delay);
@@ -291,7 +337,10 @@ void Engine::renderChunk(float* const* out, int n) {
     }
   }
 
-  writeRecording(out, n, src, ratio, was, delay0);
+  if (off) {
+    offSrc += n * ratio;
+    return; // the live clock and sample count stay where the sound card left them
+  }
 
   // the clock reference is where stream 0 read from at the start of this block
   refSeq.fetch_add(1, std::memory_order_acq_rel); // odd: writing

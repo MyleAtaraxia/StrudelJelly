@@ -39,6 +39,8 @@ public:
 
   // pipe reader thread: timed events (MIDI goes straight to the engine, parameter values via the message thread)
   void events(const juce::var& list);
+  // message thread: the same list as engine events, parameter values included (offline export), sorted by time
+  std::vector<Event> toEvents(const juce::var& list);
 
 private:
   struct Copy {
@@ -51,7 +53,7 @@ private:
     std::atomic<bool> tap { false };
   };
   struct Slot {
-    juce::String name, path, uid;
+    juce::String name, path, uid, kind; // kind: "synth" or "effect", from the scan
     bool bypass = false, missing = false, off = false;
     juce::String error;
     std::vector<ParamMeta> meta;
@@ -79,6 +81,7 @@ private:
   void publishKeys();
   void timerCallback() override;
   void setParamFromEvent(const juce::String& group, int slot, const juce::String& key, const juce::var& value, double src);
+  void paramEvents(const juce::String& group, int slot, const juce::String& key, const juce::var& value, double src, std::vector<Event>& out);
 
   Engine& engine;
   Pipe& pipe;

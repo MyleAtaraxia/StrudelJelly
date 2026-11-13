@@ -29,11 +29,11 @@ const vst = {
   onMeters: on('vst:meters'),
   onScope: on('vst:scope'), // { key, data: base64 16-bit samples }
   _scopes: (keys) => ipcRenderer.send('vst:scopes', keys), // node key -> samples per snapshot
-  // audio export (src/record.js): the host records the final mix between two AudioContext frames; stop asks where to
-  // save and returns the path, or null if cancelled (or discarded)
-  recordStart: (from) => ipcRenderer.invoke('vst:recordStart', from),
-  recordEnd: (to) => ipcRenderer.invoke('vst:recordEnd', to),
-  recordStop: (name, discard = false) => ipcRenderer.invoke('vst:recordStop', name, discard),
+  // audio export (src/record.js): the host runs the rack offline over superdough's pre-rendered streams and the
+  // events, asks where to save and returns the path (null if not saved); throws 'cancelled' after renderCancel
+  render: (job, name) => ipcRenderer.invoke('vst:render', job, name),
+  renderCancel: () => ipcRenderer.invoke('vst:renderCancel'),
+  onRenderProgress: on('vst:renderProgress'), // 0..1
   audioDevices: () => ipcRenderer.invoke('vst:audioDevices'),
   audioSettings: () => ipcRenderer.invoke('vst:audioSettings'),
   setAudio: (s) => ipcRenderer.invoke('vst:setAudio', s),

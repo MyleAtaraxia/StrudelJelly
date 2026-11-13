@@ -1,13 +1,15 @@
-// The Export pane: renders cycles `from` up to `to` (plus a tail for reverb and delay to ring out) to a WAV file.
-// It plays the sketch in real time while recording, because plugins only run in real time.
-// Timing is sample accurate: playback starts at `from` (the scheduler starts where its last query ended), notes that
-// start at or after `to` are filtered out, and the recording window is set in AudioContext time from the scheduler's
-// own clock, so the file starts on the first beat of `from` and ends `tail` seconds after `to` begins.
-// With the audio engine, jelly-host writes its final mix (superdough and every plugin) itself (vst:recordStart);
-// without it, a worklet records what Chromium plays and the page encodes the WAV.
-import { getAudioContext } from '@strudel/webaudio';
-import { captureMode, localOutputs } from './vst/engine/capture.js';
-import workletUrl from './record-worklet.js?url';
+// The Export pane: renders cycles `from` up to `to` (plus a tail for reverb and delay to ring out) to a WAV file,
+// faster than real time.
+//
+// 1. superdough renders the haps in an OfflineAudioContext (as fast as the CPU allows), one stereo pair of channels
+//    per capture stream: stream 0 is the main mix, the others are sounds routed through plugins (vst/runtime.js).
+//    MIDI and parameter events for plugins are collected instead of sent, timed in frames from the start.
+// 2. With plugins in play, jelly-host runs the rack offline over those streams and events (Engine::renderOffline)
+//    and writes the WAV. Without them (or without the engine) the streams are mixed here and the page encodes it.
+// Times are exact: cycle c is at (c - from) / cps seconds, so the file starts on the first beat of `from`.
+import { getAudioContext, setAudioContext, getSuperdoughAudioController, setSuperdoughAudioController, loadWorklets, webaudioOutput } from '@strudel/webaudio';
+import { captureMode } from './vst/engine/capture.js';
+import { wrapOutput, prepareExport, collectEvents } from './vst/runtime.js';
 
 const h = (tag, attrs = {}, ...kids) => {
   const el = document.createElement(tag);
@@ -19,17 +21,10 @@ const h = (tag, attrs = {}, ...kids) => {
   el.append(...kids);
   return el;
 };
-const until = async (ok, ms) => {
-  for (const end = performance.now() + ms; !ok(); ) {
-    if (performance.now() > end) return false;
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  return true;
-};
 
-// 24-bit PCM stereo WAV from per-channel chunks
-function encodeWav(chunks, rate) {
-  const frames = chunks.reduce((n, c) => n + c.l.length, 0);
+// 24-bit PCM stereo WAV
+function encodeWav(l, r, rate) {
+  const frames = l.length;
   const data = frames * 2 * 3;
   const buf = new ArrayBuffer(44 + data);
   const v = new DataView(buf);
@@ -40,43 +35,101 @@ function encodeWav(chunks, rate) {
   str(36, 'data'); v.setUint32(40, data, true);
   const out = new Uint8Array(buf);
   let o = 44;
-  for (const { l, r } of chunks) {
-    for (let i = 0; i < l.length; i++) {
-      for (const x of [l[i], r[i]]) {
-        const s = Math.round(Math.max(-1, Math.min(1, x)) * 8388607);
-        out[o++] = s & 255; out[o++] = (s >> 8) & 255; out[o++] = (s >> 16) & 255;
-      }
+  for (let i = 0; i < frames; i++) {
+    for (const x of [l[i], r[i]]) {
+      const s = Math.round(Math.max(-1, Math.min(1, x)) * 8388607);
+      out[o++] = s & 255; out[o++] = (s >> 8) & 255; out[o++] = (s >> 16) & 255;
     }
   }
   return out;
 }
 
-// records Chromium's own output (no engine) between two AudioContext frames
-let workletLoaded = null;
-async function recordLocal(from) {
-  const ac = getAudioContext();
-  workletLoaded ??= ac.audioWorklet.addModule(workletUrl);
-  await workletLoaded;
-  const node = new AudioWorkletNode(ac, 'jelly-record', { numberOfOutputs: 0, channelCount: 2, channelCountMode: 'explicit' });
-  const sources = localOutputs();
-  for (const s of sources) s.connect(node);
-  node.port.postMessage({ type: 'window', from });
-  const chunks = [];
-  let done;
-  const finished = new Promise((r) => (done = r));
-  node.port.onmessage = (e) => (e.data.type === 'done' ? done() : chunks.push(e.data));
-  return {
-    end: (to) => node.port.postMessage({ type: 'window', to }),
-    async stop() {
-      node.port.postMessage({ type: 'stop' });
-      await finished;
-      for (const s of sources) s.disconnect(node);
-      return chunks.length ? encodeWav(chunks, ac.sampleRate) : null;
-    },
-  };
+const STEP = 1; // seconds of audio rendered between scheduling passes
+const LEAD = 0.5; // haps are scheduled at least this far ahead of the render
+
+// superdough's sounds for `haps`, offline. Returns one { index, l, r } per stream in `streams`, `frames` long, or
+// null when cancelled. Events for plugins land in `events`.
+async function renderSounds({ haps, from, cps, frames, rate, streams, events, onProgress, cancelled }) {
+  const ctx = new OfflineAudioContext({ numberOfChannels: 2 * streams.length, length: frames, sampleRate: rate });
+  const live = getAudioContext();
+  const liveCtl = getSuperdoughAudioController();
+  // superdough works on whatever context and controller are current: swap in the offline ones until it is rendered
+  setAudioContext(ctx);
+  setSuperdoughAudioController(null);
+  try {
+    const ctl = getSuperdoughAudioController(); // a fresh one on ctx
+    await loadWorklets();
+    // stream j of `streams` -> channels 2j, 2j+1
+    ctx.destination.channelInterpretation = 'discrete';
+    const merger = new ChannelMergerNode(ctx, { numberOfInputs: 2 * streams.length });
+    merger.connect(ctx.destination);
+    const ins = streams.map((_, j) => {
+      const g = new GainNode(ctx, { channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'discrete' });
+      const split = new ChannelSplitterNode(ctx, { numberOfOutputs: 2 });
+      g.connect(split);
+      split.connect(merger, 0, 2 * j);
+      split.connect(merger, 1, 2 * j + 1);
+      return g;
+    });
+    ctl.output.destinationGain.disconnect();
+    ctl.output.destinationGain.connect(ins[0]);
+    // routed sounds play on orbit 1000 * stream + orbit (vst/runtime.js); wire them as capture.js does live
+    const getOrbit = ctl.getOrbit;
+    ctl.getOrbit = function (n, channels) {
+      const isNew = this.nodes[n] == null;
+      const orbit = getOrbit.call(this, n, channels);
+      const j = n >= 1000 ? streams.indexOf(Math.floor(n / 1000)) : -1;
+      if (isNew && j > 0) {
+        orbit.output.disconnect();
+        orbit.output.connect(ins[j]);
+      }
+      return orbit;
+    };
+
+    // Scheduled just in time, like the live scheduler: the render pauses every STEP seconds and the haps of the next
+    // stretch are added then. Scheduling everything up front makes the render crawl (every voice's envelope runs from
+    // the start), and finished voices are only cleaned up (onended, on this thread) while the render pauses.
+    // The same output the scheduler uses, called in onset order (cut groups depend on it).
+    const output = wrapOutput(webaudioOutput);
+    const duration = frames / rate;
+    let next = 0;
+    const scheduleUntil = async (end) => {
+      for (; next < haps.length && !cancelled(); next++) {
+        const hap = haps[next];
+        const t = (hap.whole.begin.valueOf() - from) / cps;
+        if (t >= end) break;
+        try {
+          if (!hap.context.onTrigger || !hap.context.dominantTrigger) await output(hap, t, hap.duration / cps, cps, t);
+        } catch (e) {
+          console.warn('[export]', e);
+        }
+      }
+    };
+    collectEvents(events);
+    try {
+      await scheduleUntil(STEP + LEAD);
+      for (let at = STEP; at < duration; at += STEP) {
+        const when = Math.floor((at * rate) / 128) * 128; // suspend times are render quantum boundaries
+        ctx.suspend(when / rate).then(async () => {
+          await scheduleUntil(at + STEP + LEAD);
+          onProgress(at / duration);
+          ctx.resume();
+        });
+      }
+      // still on the offline context: voices clean up after themselves (onended) on whatever context is current
+      const buf = await ctx.startRendering();
+      if (cancelled()) return null;
+      return streams.map((index, j) => ({ index, l: buf.getChannelData(2 * j), r: buf.getChannelData(2 * j + 1) }));
+    } finally {
+      collectEvents(null);
+    }
+  } finally {
+    setAudioContext(live);
+    setSuperdoughAudioController(liveCtl);
+  }
 }
 
-export function initExport({ container, editor, jelly, store, isLoaded, isPlaying, stop, play, getName }) {
+export function initExport({ container, editor, jelly, store, isLoaded, isPlaying, stop, evaluate, getName }) {
   let opts = { from: 0, to: 8, tail: 2 };
   try { opts = { ...opts, ...JSON.parse(store.get('jelly-export', '{}')) }; } catch {}
 
@@ -105,7 +158,7 @@ export function initExport({ container, editor, jelly, store, isLoaded, isPlayin
     h('div', { class: 'pane-body pane-scroll' },
       h('section', { class: 'set-group' },
         h('h3', {}, 'Audio'),
-        h('p', { class: 'set-note' }, 'Plays the sketch from one cycle to another and saves it as a WAV file, plugins included. It plays in real time, so it takes as long as the music.'),
+        h('p', { class: 'set-note' }, 'Renders the sketch from one cycle to another and saves it as a WAV file, plugins included. It renders faster than real time, and stops playback first.'),
         h('label', { class: 'set-row' }, label('From cycle', 'The cycle counter starts at 0'), fromIn),
         h('label', { class: 'set-row' }, label('To cycle', 'Ends where this cycle begins'), toIn),
         h('label', { class: 'set-row' }, label('Tail', 'Seconds after the last cycle, so reverb and delay can ring out'), tailIn),
@@ -121,6 +174,7 @@ export function initExport({ container, editor, jelly, store, isLoaded, isPlayin
   let saved = null;
   const valid = () => Number.isFinite(opts.from) && Number.isFinite(opts.to) && opts.from >= 0 && opts.to > opts.from && opts.tail >= 0 && opts.tail <= 30;
   const secs = (s) => (s >= 60 ? `${Math.floor(s / 60)} min ${Math.round(s % 60)} s` : `${Math.round(s * 10) / 10} s`);
+  const cleanError = (e) => String(e?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 
   function render() {
     const cps = editor.repl.scheduler.cps || 0.5;
@@ -140,130 +194,90 @@ export function initExport({ container, editor, jelly, store, isLoaded, isPlayin
     status.textContent = text;
     status.classList.toggle('set-error', error);
   };
+  const progress = (p) => {
+    fill.style.width = `${Math.round(100 * Math.max(0, Math.min(1, p)))}%`;
+  };
 
   async function start() {
     if (run || !valid()) return;
     const { from, to, tail } = opts;
-    const s = editor.repl.scheduler;
-    const ac = getAudioContext();
-    const host = captureMode() === 'host';
+    const me = (run = { cancelled: false, host: false });
+    const cancelled = () => me.cancelled;
     saved = null;
-    run = { phase: 'starting', timer: null, rec: null };
-    const me = run;
     render();
-    say('Starting…');
-    fill.style.width = '0%';
-
-    // notes that start at or after `to` never play, also if the pattern is swapped while exporting (hot reload)
-    let inner = s.pattern;
-    let filtered = null;
-    const cut = (p) => p && p.filterHaps((hap) => !hap.whole || hap.whole.begin.valueOf() < to);
-    filtered = cut(inner);
-    Object.defineProperty(s, 'pattern', { configurable: true, get: () => filtered, set: (v) => { inner = v; filtered = cut(v); } });
-    me.restore = () => {
-      delete s.pattern;
-      s.pattern = inner;
-    };
-
-    const fail = async (msg) => {
-      if (run !== me) return;
-      run = null;
-      clearInterval(me.timer);
-      me.restore();
-      if (isPlaying()) stop();
-      if (me.rec) await me.rec.discard().catch(() => {});
-      say(msg, !!msg && msg !== 'Cancelled.');
-      render();
-    };
-    me.cancel = () => fail('Cancelled.');
-
+    progress(0);
+    say('Preparing…');
+    const t0 = performance.now();
     try {
-      if (isPlaying()) {
-        stop();
-        await until(() => !isPlaying(), 3000);
-      }
-      // the scheduler starts from where its last query ended
-      s.lastEnd = from;
-      s.seconds_at_cps_change = undefined;
-      play();
-      // plugins may need a while to load before playback starts
-      if (!(await until(() => run !== me || (isPlaying() && s.seconds_at_cps_change !== undefined), 30000))) return fail('Playback did not start. Check the code for errors.');
-      if (run !== me) return;
-      const at = (c) => (c - s.num_cycles_at_cps_change) / s.cps + s.seconds_at_cps_change + s.latency; // AudioContext time of cycle c
-      const fromFrame = at(from) * ac.sampleRate;
-      if (host) {
-        await jelly.vst.recordStart(fromFrame);
-        me.rec = {
-          end: (f) => jelly.vst.recordEnd(f),
-          save: () => jelly.vst.recordStop(getName()),
-          discard: () => jelly.vst.recordStop(getName(), true),
-        };
-      } else {
-        const r = await recordLocal(fromFrame);
-        me.rec = {
-          end: (f) => r.end(f),
-          save: async () => {
-            const bytes = await r.stop();
-            if (!bytes || bytes.length <= 44) throw new Error('nothing was recorded');
-            return jelly.saveRecording(getName(), bytes);
-          },
-          discard: () => r.stop(),
-        };
-      }
-      // the engine's output lags the AudioContext by its own latency; wait that long after the end before stopping
-      const lag = host ? ((await jelly.vst.status())?.latencyMs ?? 100) / 1000 + 0.25 : 0.15;
-      let endTime = null;
-      me.phase = 'playing';
-      me.timer = setInterval(() => {
-        if (run !== me) return;
-        const c = s.now();
-        if (endTime == null && s.lastEnd >= to) {
-          endTime = at(to) + tail;
-          me.rec.end(endTime * ac.sampleRate);
-        }
-        if (endTime != null && c >= to) {
-          const left = Math.max(0, endTime - ac.currentTime);
-          fill.style.width = `${Math.min(100, 100 * (1 - left / Math.max(tail, 0.01)))}%`;
-          say(tail > 0 ? `Tail · ${Math.ceil(left)} s left` : 'Finishing…');
-          if (ac.currentTime >= endTime + lag) finish();
-        } else {
-          const p = Math.max(0, Math.min(1, (c - from) / (to - from)));
-          fill.style.width = `${100 * p}%`;
-          say(`Recording cycle ${Math.max(from, Math.floor(c))} · ${from} to ${to}`);
-        }
-      }, 100);
-    } catch (e) {
-      fail(`Export failed: ${String(e?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`);
-    }
+      if (isPlaying()) stop();
+      const pattern = await evaluate();
+      if (!pattern) throw new Error('the code has an error');
+      if (cancelled()) return;
+      const cps = editor.repl.scheduler.cps;
+      const rate = getAudioContext().sampleRate;
+      const frames = Math.max(1, Math.round(((to - from) / cps + tail) * rate));
+      const haps = pattern
+        .queryArc(from, to, { _cps: cps })
+        .filter((hap) => hap.hasOnset() && hap.whole.begin.valueOf() >= from)
+        .sort((a, b) => a.whole.begin.valueOf() - b.whole.begin.valueOf());
+      const host = captureMode() === 'host';
+      // every route the haps take gets its plugins and stream before anything renders
+      const streams = host ? await prepareExport(haps) : [0];
+      if (cancelled()) return;
 
-    async function finish() {
-      if (me.phase !== 'playing') return;
-      me.phase = 'saving';
-      clearInterval(me.timer);
-      me.restore();
-      stop();
-      say('Saving…');
-      try {
-        saved = await me.rec.save();
-        say(saved ? `Saved ${saved.split(/[\\/]/).pop()}` : 'Not saved.');
-      } catch (e) {
-        say(`Export failed: ${String(e?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`, true);
+      say('Rendering sounds…');
+      const events = [];
+      const parts = await renderSounds({
+        haps, from, cps, frames, rate, streams, events, cancelled,
+        onProgress: (p) => !cancelled() && progress(p * (host ? 0.5 : 1)),
+      });
+      if (!parts || cancelled()) return;
+
+      if (host && (events.length > 0 || streams.length > 1)) {
+        // plugins in play: the engine runs the rack over it and writes the file
+        say('Rendering plugins…');
+        me.host = true;
+        const off = jelly.vst.onRenderProgress((p) => !cancelled() && progress(0.5 + 0.5 * p));
+        try {
+          saved = await jelly.vst.render({ srcRate: rate, frames, streams: parts, events }, getName());
+        } finally {
+          off();
+        }
+      } else {
+        say('Saving…');
+        const l = new Float32Array(frames), r = new Float32Array(frames);
+        for (const part of parts)
+          for (let i = 0; i < frames; i++) {
+            l[i] += part.l[i];
+            r[i] += part.r[i];
+          }
+        saved = await jelly.saveRecording(getName(), encodeWav(l, r, rate));
       }
-      run = null;
-      render();
+      if (cancelled()) return;
+      say(saved ? `Saved ${saved.split(/[\\/]/).pop()} (took ${secs((performance.now() - t0) / 1000)})` : 'Not saved.');
+    } catch (e) {
+      const msg = cleanError(e);
+      if (!cancelled()) say(/cancelled/.test(msg) ? 'Cancelled.' : `Export failed: ${msg}`, !/cancelled/.test(msg));
+    } finally {
+      if (run === me) {
+        run = null;
+        render();
+      }
     }
   }
 
   go.addEventListener('click', start);
-  cancel.addEventListener('click', () => run?.cancel());
+  cancel.addEventListener('click', () => {
+    if (!run) return;
+    run.cancelled = true;
+    if (run.host) jelly.vst.renderCancel();
+    run = null;
+    saved = null;
+    say('Cancelled.');
+    render();
+  });
   show.addEventListener('click', () => saved && jelly.revealRecording(saved));
   render();
 
-  return {
-    render,
-    // Stop pressed while exporting cancels it (the export's own stop happens while saving)
-    onPlaying(playing) {
-      if (!playing && run && run.phase === 'playing') run.cancel();
-    },
-  };
+  return { render };
 }

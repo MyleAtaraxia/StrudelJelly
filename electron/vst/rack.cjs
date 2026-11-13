@@ -124,7 +124,7 @@ class RackManager extends EventEmitter {
     const slots = plugins.map((p, i) => {
       const info = p.missing ? null : this.scanner.find(p.name);
       const name = info?.name ?? p.name;
-      const s = { name, uid: info?.uid ?? '', path: info?.path ?? '', bypass: !!p.bypass, off: this.isOff(id, i, name), params: p.params || {} };
+      const s = { name, uid: info?.uid ?? '', kind: info?.kind ?? '', path: info?.path ?? '', bypass: !!p.bypass, off: this.isOff(id, i, name), params: p.params || {} };
       if (reload || !had.includes(name)) {
         let k = saved[i]?.plugin === name && !usedSaved.has(i) ? i : saved.findIndex((x, j) => x?.plugin === name && !usedSaved.has(j));
         if (k >= 0) {

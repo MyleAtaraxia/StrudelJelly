@@ -203,6 +203,7 @@ function createWindow() {
     minWidth: 720,
     minHeight: 520,
     title: 'Strudel Jelly',
+    show: !process.env.JELLY_HIDDEN, // tests: no window on screen
     backgroundColor: bg(),
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: bg(), symbolColor: ink(), height: 57 },

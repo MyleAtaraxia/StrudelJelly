@@ -52,13 +52,14 @@ onMeters(fn: (m: Record<string /* entry */, [number, number]>) => void): () => v
 _scopes(keys: Record<string /* node key */, number>): void
 onScope(fn: (s: { key: string, data: string }) => void): () => void
 
-// audio export (src/record.js): the host writes its final mix (what the speakers get) to a temp 24-bit WAV, only the
-// audio between AudioContext frames `from` and `to` (mapped like event times, so it is sample accurate; both open when
-// left out). Stop asks where to save it (named after `name`) and resolves to the saved path, or null if cancelled;
-// `discard` drops the recording without asking
-recordStart(from?: number): void
-recordEnd(to: number): void
-recordStop(name: string, discard?: boolean): string | null
+// audio export (src/record.js), faster than real time: superdough's sounds are rendered offline first, one buffer
+// per capture stream (index 0 = the main mix); events are the timed events the app would send, in frames from the
+// start of the export. The host runs the rack over them as fast as the CPU allows (the sound card plays silence
+// meanwhile), asks where to save the WAV (named after `name`) and resolves to the path, or null if not saved.
+// renderCancel makes a running render reject with 'cancelled'.
+render(job: { srcRate: number, frames: number, streams: Array<{ index: number, l: Float32Array, r: Float32Array }>, events: any[] }, name: string): string | null
+renderCancel(): void
+onRenderProgress(fn: (p: number /* 0..1 */) => void): () => void
 
 // audio settings
 audioDevices(): { drivers: string[], devices: Record<string /* driver */, string[]> }

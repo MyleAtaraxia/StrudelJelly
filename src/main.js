@@ -193,7 +193,6 @@ editor = createEditor({
     started = !!s.started;
     if (started) stopExample(); // one thing plays at a time
     viz?.setPlaying(started);
-    exporter?.onPlaying(started);
     clearInterval(tempoTimer);
     tempoTimer = started ? setInterval(renderTempo, 400) : null;
     renderTempo();
@@ -382,7 +381,8 @@ exporter = initExport({
   isLoaded: () => loaded,
   isPlaying: () => started,
   stop: () => editor.stop(),
-  play: () => { stopExample(); evaluate(); },
+  // the current code without starting playback; the pattern, or nothing when it has an error
+  evaluate: () => { stopExample(); return editor.repl.evaluate(editor.code, false); },
   getName: () => sketches.current() || 'recording',
 });
 nameBtn.addEventListener('click', () => showPane('sketches'));

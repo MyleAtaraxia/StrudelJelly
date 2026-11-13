@@ -1,6 +1,7 @@
 // The audio engine: a pull-based graph. Whoever drives it calls render() for the next block of output and the
-// engine pulls its sources. Today the only driver is the sound card callback (DeviceDriver in Main.cpp), but nothing
-// here depends on device timing, so an offline driver can call render() in a loop to export faster than real time.
+// engine pulls its sources. The sound card callback (DeviceDriver in Main.cpp) drives it while playing; an audio export
+// (renderOffline) drives it in a loop as fast as the CPU allows, with pre-rendered audio in place of the capture
+// streams, while the sound card gets silence.
 //
 // Graph: capture streams 0..7 (StreamInput) and the rack's plugin chains (a Plan, built by Rack on the message
 // thread and swapped in whole). Every rack entry copy is a node with exactly one destination (another node or the
@@ -33,7 +34,9 @@
 #include "StreamInput.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <array>
+#include <algorithm>
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -85,6 +88,7 @@ public:
   static constexpr int kSize = 1 << 16, kMask = kSize - 1;
   StereoDelay() { for (auto& b : buf) b.assign(kSize, 0.0f); }
   void process(float* l, float* r, int n, int delay);
+  void clear() { for (auto& b : buf) std::fill(b.begin(), b.end(), 0.0f); }
 private:
   std::vector<float> buf[2];
   int64_t w = 0;
@@ -146,23 +150,28 @@ private:
   std::vector<Event> pending; // audio thread only
 
 public:
-  // Message thread: write the final stereo mix (what the speakers get) to a 24-bit WAV file until stopRecording.
-  // Only audio inside the window [from, to) is written. Both ends are AudioContext frames, mapped to the output the
-  // same way events are (stream 0's clock plus the rack's latency), so an export starts and ends on the exact sample
-  // where a cycle does. The audio thread hands blocks to a background writer, so it never touches the disk.
-  static constexpr double kOpen = 1e300;
-  juce::String startRecording(const juce::File& file, double from = -kOpen);
-  void setRecordingEnd(double to) { recTo.store(to); }
-  double stopRecording(); // seconds written; 0 when not recording
+  // Audio export: renders a whole job on the calling thread as fast as the CPU allows and writes the final stereo mix
+  // (what the speakers would get) to `out`. Stream audio and events are timed in source frames from 0 (the start of
+  // the export) at srcRate; the rack's latency is cut off the front, so source frame 0 is the file's first sample.
+  // The sound card plays silence meanwhile, and the plugins are reset before and after so nothing live bleeds in.
+  // progress(0..1) returns false to cancel.
+  struct OfflineJob {
+    double srcRate = 48000;
+    int64_t frames = 0;                                           // source frames, tail included
+    std::array<std::vector<float>, proto::kMaxStreams * 2> audio; // stream i: [2i] left, [2i+1] right; empty = silent
+    std::vector<Event> events;                                    // sorted by src
+  };
+  juce::String renderOffline(OfflineJob& job, juce::AudioFormatWriter& out, const std::function<bool(double)>& progress);
+  // Clears every plugin's tails and voices (message thread only): before and after an offline render.
+  void resetPlugins();
 
 private:
-  juce::TimeSliceThread writerThread { "jelly-record" };
-  std::unique_ptr<juce::AudioFormatWriter::ThreadedWriter> recorder; // message thread
-  juce::SpinLock recorderLock;                                        // guards `writing` against the audio thread
-  juce::AudioFormatWriter::ThreadedWriter* writing = nullptr;
-  int64_t recorded = 0; // frames, under recorderLock
-  std::atomic<double> recFrom { -kOpen }, recTo { kOpen };
-  void writeRecording(float* const* out, int n, double src, double ratio, bool valid, int delay);
+  juce::CriticalSection driveLock; // held by an export for its whole length; the sound card only renders when free
+  OfflineJob* offline = nullptr;   // set while an export renders (its thread only)
+  size_t offEvent = 0;
+  double offSrc = 0, offRatio = 1;
+  void resetGraph(Plan& p);
+  void readOffline(int stream, float* const* out, int n, double src, double ratio);
 
 public:
   // tests (JELLY_HOST_DEBUG): record the output for a while, split into what superdough streams send to the

@@ -14,10 +14,13 @@
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_events/juce_events.h>
+#include <atomic>
+#include <memory>
+#include <thread>
 
 namespace jelly {
 
-// Drives the engine from the sound card. Another driver (offline export) would call Engine::render the same way.
+// Drives the engine from the sound card. An audio export drives it itself (Engine::renderOffline).
 class DeviceDriver : public juce::AudioIODeviceCallback {
 public:
   explicit DeviceDriver(Engine& e) : engine(e) {}
@@ -136,6 +139,8 @@ public:
 
   void shutdown() override {
     stopTimer();
+    renderCancel.store(true);
+    if (renderThread.joinable()) renderThread.join();
     devices.removeAudioCallback(&deviceDriver);
     devices.closeAudioDevice();
     rack.reset();
@@ -150,6 +155,65 @@ private:
   bool debug = false;
   bool opened = false;
   juce::String deviceError;
+
+  // ---- audio export (Engine::renderOffline) ----
+  // { in, out, frames, srcRate, streams: [i, ...], events: [...] }: `in` holds each listed stream's audio as raw f32,
+  // all of its left channel then all of its right (`frames` each); events are the app's timed events (frames from 0).
+  // The render runs on its own thread and sends { event: "renderProgress", p } on the way; the reply comes at the end.
+  std::thread renderThread;
+  std::atomic<bool> rendering { false }, renderCancel { false };
+
+  juce::String startRender(const juce::var& msg, const juce::var& id) {
+    if (rendering.load()) return "an export is already running";
+    auto job = std::make_shared<Engine::OfflineJob>();
+    job->srcRate = (double) msg["srcRate"];
+    job->frames = (juce::int64) (double) msg["frames"];
+    if (!(job->srcRate > 0) || job->frames <= 0) return "nothing to render";
+    if (const auto* streams = msg["streams"].getArray(); streams != nullptr && !streams->isEmpty()) {
+      juce::MemoryBlock data;
+      if (!juce::File(msg["in"].toString()).loadFileAsData(data)) return "could not read the audio to render";
+      const auto per = (size_t) job->frames;
+      if (data.getSize() < per * 2 * sizeof(float) * (size_t) streams->size()) return "the audio to render is incomplete";
+      const auto* f = static_cast<const float*>(data.getData());
+      for (int k = 0; k < streams->size(); ++k) {
+        const int i = (int) (*streams)[k];
+        if (i < 0 || i >= proto::kMaxStreams) continue;
+        const float* at = f + (size_t) k * per * 2;
+        job->audio[(size_t) i * 2].assign(at, at + per);
+        job->audio[(size_t) i * 2 + 1].assign(at + per, at + per * 2);
+      }
+    }
+    job->events = rack->toEvents(msg["events"]);
+
+    const juce::File file(msg["out"].toString());
+    file.deleteFile();
+    std::unique_ptr<juce::OutputStream> os = std::make_unique<juce::FileOutputStream>(file);
+    if (static_cast<juce::FileOutputStream*>(os.get())->failedToOpen()) return "could not write " + file.getFullPathName();
+    juce::WavAudioFormat wav;
+    const auto opts = juce::AudioFormatWriterOptions{}.withSampleRate(engine.sampleRate()).withNumChannels(2).withBitsPerSample(24);
+    std::shared_ptr<juce::AudioFormatWriter> writer(wav.createWriterFor(os, opts).release());
+    if (writer == nullptr) return "could not write " + file.getFullPathName();
+
+    if (renderThread.joinable()) renderThread.join();
+    rendering.store(true);
+    renderCancel.store(false);
+    engine.resetPlugins();
+    renderThread = std::thread([this, job, writer, id]() mutable {
+      juce::Thread::setCurrentThreadName("jelly-render");
+      const auto err = engine.renderOffline(*job, *writer, [this](double p) {
+        pipe.send(obj({ { "event", "renderProgress" }, { "p", p } }));
+        return !renderCancel.load();
+      });
+      writer.reset(); // finishes the WAV header and closes the file before the reply
+      juce::MessageManager::callAsync([this, err, id] {
+        engine.resetPlugins();
+        if (err.isEmpty()) pipe.send(obj({ { "id", id }, { "ok", true }, { "result", true } }));
+        else pipe.send(obj({ { "id", id }, { "ok", false }, { "error", err } }));
+        rendering.store(false);
+      });
+    });
+    return {};
+  }
 
   void handle(const juce::String& text) {
     const juce::var msg = juce::JSON::parse(text);
@@ -168,13 +232,11 @@ private:
     else if (cmd == "paramValues") result = rack->paramValues(msg["group"].toString(), (int) msg["slot"]);
     else if (cmd == "params") result = rack->params(msg["group"].toString(), (int) msg["slot"]);
     else if (cmd == "openEditor") { error = rack->openEditor(msg["group"].toString(), (int) msg["slot"]); result = error.isEmpty(); }
-    else if (cmd == "recordStart") {
-      const juce::var from = msg["from"];
-      error = engine.startRecording(juce::File(msg["path"].toString()), from.isVoid() ? -Engine::kOpen : (double) from);
-      result = error.isEmpty();
+    else if (cmd == "render") {
+      error = startRender(msg, id);
+      if (error.isEmpty()) return; // replies when done
     }
-    else if (cmd == "recordEnd") { engine.setRecordingEnd((double) msg["to"]); result = true; }
-    else if (cmd == "recordStop") result = engine.stopRecording();
+    else if (cmd == "renderCancel") { renderCancel.store(true); result = true; }
     else if (cmd == "debugRecord" && debug) { engine.debugRecord((int) ((double) msg["seconds"] * engine.sampleRate())); result = true; }
     else if (cmd == "debugRecordGet" && debug) {
       if (engine.debugRecording()) error = "still recording";

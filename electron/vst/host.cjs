@@ -5,6 +5,7 @@
 const { spawn } = require('node:child_process');
 const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
+const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { encodeJson, Decoder } = require('./protocol.cjs');
 const { Scanner } = require('./scanner.cjs');
@@ -151,6 +152,7 @@ class Host extends EventEmitter {
     } else if (m.event === 'audio') this.emit('audio', m.settings);
     else if (m.event === 'param' || m.event === 'meters' || m.event === 'crashed') this.emit('event', m);
     else if (m.event === 'scope') this.emit('scope', m);
+    else if (m.event === 'renderProgress') this.emit('renderProgress', m.p);
   }
 
   request(cmd, args = {}) {
@@ -281,36 +283,44 @@ function setupVst({ app, ipcMain, getWin, sketchesDir }) {
     await host.setAudio(s && typeof s === 'object' ? s : {});
   });
   ipcMain.handle('vst:setStreamLatency', (_, ms) => host.request('setStreamLatency', { ms: Number(ms) }).catch(() => false));
-  // Export audio (src/record.js): the host writes the final mix to a temp WAV, moved where the user picks on stop.
-  // from / to are AudioContext frames: only the audio between them is written (see Engine::startRecording)
-  let recording = null;
-  ipcMain.handle('vst:recordStart', async (_, from) => {
-    if (recording) await host.request('recordStop').catch(() => {});
-    const file = path.join(app.getPath('temp'), `strudel-jelly-${process.pid}-${Date.now()}.wav`);
-    await host.request('recordStart', Number.isFinite(from) ? { path: file, from } : { path: file });
-    recording = file;
-    return true;
-  });
-  ipcMain.handle('vst:recordEnd', (_, to) => Number.isFinite(to) && host.request('recordEnd', { to }));
-  ipcMain.handle('vst:recordStop', async (_, name, discard) => {
-    const file = recording;
-    recording = null;
-    if (!file) return null;
-    const seconds = await host.request('recordStop').catch(() => 0);
-    if (discard || !(seconds > 0) || !fs.existsSync(file)) {
-      fs.rm(file, { force: true }, () => {});
-      if (discard) return null;
-      throw new Error('nothing was recorded');
+  // Export audio (src/record.js), faster than real time: the renderer sends superdough's audio already rendered (one
+  // stereo buffer per capture stream) and the plugin events, timed in frames from the start of the export. The host
+  // runs the rack over them offline and writes a temp WAV, moved where the user picks.
+  let renderTemp = new Set();
+  const rmTemp = (f) => {
+    renderTemp.delete(f);
+    fs.rm(f, { force: true }, () => {});
+  };
+  host.on('renderProgress', (p) => send('vst:renderProgress', p));
+  ipcMain.handle('vst:render', async (_, job, name) => {
+    const { srcRate, frames, streams, events } = job || {};
+    if (!(srcRate > 0) || !(frames > 0) || !Array.isArray(streams) || !Array.isArray(events)) throw new Error('nothing to render');
+    const stamp = `${process.pid}-${Date.now()}`;
+    const input = path.join(app.getPath('temp'), `strudel-jelly-${stamp}.f32`);
+    const output = path.join(app.getPath('temp'), `strudel-jelly-${stamp}.wav`);
+    renderTemp.add(input).add(output);
+    try {
+      // per stream: all of its left channel, then all of its right
+      const fh = await fsp.open(input, 'w');
+      try {
+        for (const st of streams)
+          for (const ch of [st.l, st.r]) await fh.write(Buffer.from(ch.buffer, ch.byteOffset, frames * 4));
+      } finally {
+        await fh.close();
+      }
+      const r = await host.request('render', { in: input, out: output, frames, srcRate, streams: streams.map((st) => st.index), events });
+      if (r?.error) throw new Error(r.error === 'cancelled' ? 'cancelled' : r.error);
+      const to = await askWavPath(getWin(), app, name);
+      if (!to) return null;
+      await moveFile(output, to);
+      return to;
+    } finally {
+      rmTemp(input);
+      rmTemp(output);
     }
-    const to = await askWavPath(getWin(), app, name).catch(() => null);
-    if (!to) {
-      fs.rm(file, { force: true }, () => {});
-      return null;
-    }
-    await moveFile(file, to);
-    return to;
   });
-  app.on('will-quit', () => recording && fs.rm(recording, { force: true }, () => {}));
+  ipcMain.handle('vst:renderCancel', () => host.request('renderCancel').catch(() => false));
+  app.on('will-quit', () => [...renderTemp].forEach(rmTemp));
   // the capture worklet's port: every message is an ArrayBuffer of AUDIO frames
   ipcMain.on('vst:capture', (e) => {
     const port = e.ports[0];

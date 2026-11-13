@@ -54,6 +54,20 @@ std::unique_ptr<juce::AudioPluginInstance> Rack::load(const Slot& s, bool& synth
   auto* fmt = formats.getFormat(0);
   for (auto* f : formats.getFormats()) if (f->fileMightContainThisPluginType(s.path)) { fmt = f; break; }
   auto& descs = descCache[s.path];
+  // A VST3 the out-of-process scan already described is opened from that description: listing a file's plugins
+  // creates and drops a throwaway instance, and FabFilter Twin 3 sometimes fast-fails (ending the host) in that teardown.
+  if (descs.isEmpty() && fmt->getName() == "VST3" && s.kind.isNotEmpty()) {
+    const auto parts = juce::StringArray::fromTokens(s.uid, "-", "");
+    if (parts.size() >= 4 && parts[0] == "VST3") {
+      auto* d = descs.add(new juce::PluginDescription());
+      d->pluginFormatName = "VST3";
+      d->name = s.name;
+      d->fileOrIdentifier = s.path;
+      d->uniqueId = d->deprecatedUid = (int) (juce::uint32) parts[parts.size() - 1].getHexValue64();
+      d->isInstrument = s.kind == "synth";
+      if (d->createIdentifierString() != s.uid) descs.clear(); // the uid is from another file or version: scan it
+    }
+  }
   if (descs.isEmpty()) {
     Busy b(("scan\t0\t" + s.name).toRawUTF8());
     guard([&] { fmt->findAllTypesForFile(descs, s.path); });
@@ -253,6 +267,7 @@ juce::var Rack::apply(const juce::var& msg) {
         s.name = sp["name"].toString();
         s.path = sp["path"].toString();
         s.uid = sp["uid"].toString();
+        s.kind = sp["kind"].toString();
         s.bypass = (bool) sp["bypass"];
         s.off = (bool) sp["off"];
         s.missing = s.path.isEmpty();
@@ -588,6 +603,27 @@ juce::var Rack::debugCopies(const juce::String& group, int slot, const juce::Str
 }
 
 // ---------- events ----------
+// MIDI events of a list (params left in `params`)
+static void midiEvents(const juce::Array<juce::var>& arr, const std::unordered_map<std::string, int>& keyToId, std::vector<Event>& out,
+                       juce::Array<juce::var>& params) {
+  for (auto& e : arr) {
+    const auto type = e[1].toString();
+    if (type == "p") { params.add(e); continue; }
+    if (type == "panic") { out.push_back({ -1, evPanic, 0, 0, 0, 0, 0, 0 }); continue; }
+    auto it = keyToId.find(e[0].toString().toStdString());
+    if (it == keyToId.end()) continue;
+    Event ev { it->second, 0, 0, 0, 0, 0, 0, (double) e[2] };
+    ev.a = (uint8_t) juce::jlimit(0, 127, (int) e[3]);
+    ev.b = (uint8_t) juce::jlimit(0, 127, (int) e[4]);
+    if (type == "on") ev.type = evNoteOn;
+    else if (type == "off") ev.type = evNoteOff;
+    else if (type == "cc") ev.type = evCC;
+    else if (type == "bend") { ev.type = evBend; ev.value = (float) (double) e[4]; }
+    else continue;
+    out.push_back(ev);
+  }
+}
+
 void Rack::events(const juce::var& list) {
   const auto* arr = list.getArray();
   if (arr == nullptr) return;
@@ -596,22 +632,7 @@ void Rack::events(const juce::var& list) {
   juce::Array<juce::var> params;
   {
     std::lock_guard<std::mutex> l(keyLock);
-    for (auto& e : *arr) {
-      const auto type = e[1].toString();
-      if (type == "p") { params.add(e); continue; }
-      if (type == "panic") { out.push_back({ -1, evPanic, 0, 0, 0, 0, 0, 0 }); continue; }
-      auto it = keyToId.find(e[0].toString().toStdString());
-      if (it == keyToId.end()) continue;
-      Event ev { it->second, 0, 0, 0, 0, 0, 0, (double) e[2] };
-      ev.a = (uint8_t) juce::jlimit(0, 127, (int) e[3]);
-      ev.b = (uint8_t) juce::jlimit(0, 127, (int) e[4]);
-      if (type == "on") ev.type = evNoteOn;
-      else if (type == "off") ev.type = evNoteOff;
-      else if (type == "cc") ev.type = evCC;
-      else if (type == "bend") { ev.type = evBend; ev.value = (float) (double) e[4]; }
-      else continue;
-      out.push_back(ev);
-    }
+    midiEvents(*arr, keyToId, out, params);
   }
   if (!out.empty()) engine.push(out.data(), (int) out.size());
   if (!params.isEmpty())
@@ -620,7 +641,28 @@ void Rack::events(const juce::var& list) {
     });
 }
 
+std::vector<Event> Rack::toEvents(const juce::var& list) {
+  std::vector<Event> out;
+  const auto* arr = list.getArray();
+  if (arr == nullptr) return out;
+  juce::Array<juce::var> params;
+  {
+    std::lock_guard<std::mutex> l(keyLock);
+    midiEvents(*arr, keyToId, out, params);
+  }
+  for (auto& e : params) paramEvents(e[0].toString(), (int) e[3], e[4].toString(), e[5], (double) e[2], out);
+  std::stable_sort(out.begin(), out.end(), [](const Event& a, const Event& b) { return a.src < b.src; });
+  return out;
+}
+
 void Rack::setParamFromEvent(const juce::String& group, int slot, const juce::String& key, const juce::var& value, double src) {
+  std::vector<Event> out;
+  paramEvents(group, slot, key, value, src, out);
+  if (!out.empty()) engine.push(out.data(), (int) out.size());
+}
+
+void Rack::paramEvents(const juce::String& group, int slot, const juce::String& key, const juce::var& value, double src,
+                       std::vector<Event>& out) {
   auto it = groups.find(group);
   if (it == groups.end()) return;
   Group& g = *it->second;
@@ -644,9 +686,7 @@ void Rack::setParamFromEvent(const juce::String& group, int slot, const juce::St
     if (convCache.size() > 8192) convCache.clear();
     convCache[ck] = v;
   }
-  std::vector<Event> out;
   for (auto& c : g.copies) out.push_back({ c->id, evParam, 0, 0, slot, m->index, v, src });
-  engine.push(out.data(), (int) out.size());
 }
 
 void Rack::setScopes(const juce::var& keys) {

@@ -450,7 +450,14 @@ function remember(spec) {
   for (const e of spec.entries) e.plugins.forEach((p, i) => codeValues.set(`${e.name}\t${i}`, { ...p.params }));
 }
 
-async function send(spec) {
+// the rack send in flight, so an export can wait for it instead of sending another on top
+let inflight = Promise.resolve();
+function send(spec) {
+  const p = sendNow(spec);
+  inflight = p.catch(() => {});
+  return p;
+}
+async function sendNow(spec) {
   if (!api?._apply) return;
   lastSpec = spec;
   let status;
@@ -494,6 +501,12 @@ function lookahead() {
     haps = curPattern.queryArc(from, horizon);
   } catch {}
   if (haps.length > MAX_QUERY_HAPS) haps = haps.slice(0, MAX_QUERY_HAPS);
+  prepareHaps(haps);
+}
+
+// returns whether any route was new
+function prepareHaps(haps) {
+  let added = false;
   for (const hap of haps) {
     const v = hap.value;
     if (!v || typeof v !== 'object' || v._jset) continue;
@@ -503,8 +516,32 @@ function lookahead() {
     } catch {
       continue; // wrong usage is reported when the hap plays
     }
-    if (path.length && unprepared(path)) addDynamic(path);
+    if (path.length && unprepared(path)) {
+      addDynamic(path);
+      added = true;
+    }
   }
+  return added;
+}
+
+// ---------- audio export (src/record.js) ----------
+// Before rendering haps offline: give every route they take its copy and capture stream, and wait until the engine
+// has the rack. Returns the capture streams in use (0 first).
+export async function prepareExport(haps) {
+  if (!cur) return [0];
+  const added = prepareHaps(haps);
+  clearTimeout(dynTimer); // sent below, after the evaluate's own send
+  await inflight;
+  if (added) {
+    applyStreams(cur);
+    await send(specOf(cur));
+  }
+  return [0, ...new Set(cur.streams.values())].sort((a, b) => a - b);
+}
+// While set, timed events (MIDI, parameter values) go into this array instead of to the engine.
+let collected = null;
+export function collectEvents(list) {
+  collected = list;
 }
 
 // a route that still needs its copy, or (superdough sounds) its capture stream: an entry's default copy exists
@@ -583,6 +620,7 @@ const flushEvents = () => {
   if (e.length) api?._events?.(e);
 };
 const push = (e) => {
+  if (collected) return void collected.push(e);
   if (!pending.length) queueMicrotask(flushEvents);
   pending.push(e);
 };
