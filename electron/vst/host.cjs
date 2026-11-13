@@ -7,11 +7,13 @@ const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const path = require('node:path');
 const { encodeJson, Decoder } = require('./protocol.cjs');
+const { Scanner } = require('./scanner.cjs');
+const { RackManager } = require('./rack.cjs');
 
 const EXE = process.platform === 'win32' ? 'jelly-host.exe' : 'jelly-host';
 const HELLO_TIMEOUT = 5000;
 const CRASH_WINDOW = 60000;
-const MAX_CRASHES = 3; // in CRASH_WINDOW, then give up ('down')
+const MAX_CRASHES = 3; // in CRASH_WINDOW: the plugin that was running is turned off, or if none is known, give up ('down')
 const MAX_QUEUED = 1 << 20; // bytes waiting for the host's stdin before audio is dropped
 
 class Host extends EventEmitter {
@@ -71,7 +73,12 @@ class Host extends EventEmitter {
     let stderr = '';
     const decoder = new Decoder((m) => this.onMessage(m));
     proc.stdout.on('data', (d) => decoder.feed(d));
-    proc.stderr.on('data', (d) => (stderr = (stderr + d).slice(-2000)));
+    let culprit = null; // what was running when the host faulted (host/src/platform_win.cpp)
+    proc.stderr.on('data', (d) => {
+      stderr = (stderr + d).slice(-4000);
+      const m = /JELLY-CRASH-IN: ([^\r\n]*)/.exec(stderr);
+      if (m) culprit = m[1];
+    });
     proc.stdin.on('error', () => {});
     proc.on('error', (e) => {
       stderr += e.message;
@@ -95,7 +102,14 @@ class Host extends EventEmitter {
       const now = Date.now();
       this.crashes = [...this.crashes.filter((t) => now - t < CRASH_WINDOW), now];
       const why = `audio engine exited (${signal || 'code ' + code})${stderr.trim() ? ': ' + stderr.trim().slice(-300) : ''}`;
-      if (this.crashes.length >= MAX_CRASHES) {
+      if (culprit && culprit.includes('\t')) this.lastCulprit = culprit;
+      if (this.crashes.length >= MAX_CRASHES && this.lastCulprit) {
+        const label = this.lastCulprit;
+        this.lastCulprit = null;
+        this.crashes = [];
+        const plugin = this.quarantineHandler?.(label) || label.split('\t')[2];
+        this.pendingBanner = { kind: 'quarantined', text: `${plugin} kept crashing the audio engine and was turned off. Reload it to try again.` };
+      } else if (this.crashes.length >= MAX_CRASHES) {
         this.setState({ state: 'down', error: why, cpu: 0 });
         return;
       }
@@ -110,7 +124,10 @@ class Host extends EventEmitter {
       this.ready = true;
       const wasRestart = this.state.state === 'restarting';
       this.setState({ state: 'ready', error: r.error || undefined });
-      if (wasRestart) this.emit('banner', { kind: 'restarted', text: 'The audio engine stopped and was restarted.' });
+      if (wasRestart) this.emit('banner', { kind: 'restarted', text: 'The audio engine stopped and was restarted. Plugins were reloaded from their last saved state.' });
+      if (this.pendingBanner) this.emit('banner', this.pendingBanner);
+      this.pendingBanner = null;
+      this.emit('ready', { restarted: wasRestart });
     } catch (e) {
       this.proc?.kill();
     }
@@ -131,6 +148,7 @@ class Host extends EventEmitter {
       if (!this.ready) return;
       this.setState({ cpu: m.cpu, sampleRate: m.sampleRate, blockSize: m.blockSize, latencyMs: Math.round(m.latencyMs * 10) / 10 });
     } else if (m.event === 'audio') this.emit('audio', m.settings);
+    else if (m.event === 'param' || m.event === 'meters' || m.event === 'crashed') this.emit('event', m);
   }
 
   request(cmd, args = {}) {
@@ -140,6 +158,13 @@ class Host extends EventEmitter {
       this.pending.set(id, { resolve, reject });
       this.proc.stdin.write(encodeJson({ ...args, id, cmd }));
     });
+  }
+
+  // timed events for the rack (MIDI, parameter values, panic): [[copyKey | entry, type, frame, ...], ...]
+  sendEvents(list) {
+    const stdin = this.ready && this.proc?.stdin;
+    if (!stdin || !Array.isArray(list) || !list.length) return;
+    stdin.write(encodeJson({ cmd: 'ev', e: list }));
   }
 
   // one or more ready-made AUDIO frames
@@ -177,7 +202,7 @@ const toBuffer = (d) =>
   Buffer.isBuffer(d) ? d : d instanceof ArrayBuffer ? Buffer.from(d) : ArrayBuffer.isView(d) ? Buffer.from(d.buffer, d.byteOffset, d.byteLength) : null;
 
 // Wires the host into the app. getWin returns the main window (for pushing events).
-function setupVst({ app, ipcMain, getWin }) {
+function setupVst({ app, ipcMain, getWin, sketchesDir }) {
   const exe =
     process.env.JELLY_HOST ||
     (app.isPackaged ? path.join(process.resourcesPath, 'host', EXE) : path.join(__dirname, '..', '..', 'host', 'bin', EXE));
@@ -188,6 +213,40 @@ function setupVst({ app, ipcMain, getWin }) {
   };
   host.on('status', (s) => send('vst:status', s));
   host.on('banner', (b) => send('vst:banner', b));
+
+  const scanner = new Scanner({ exe, cacheFile: path.join(app.getPath('userData'), 'vst-plugins.json') });
+  const racks = new RackManager({ host, scanner, sketchesDir });
+  host.quarantineHandler = (label) => racks.quarantine(label);
+  scanner.on('scan', (info) => send('vst:scan', info));
+  scanner.on('changed', () => racks.spec && racks.apply({ ...racks.spec, _reset: false }));
+  racks.on('rack', (r) => send('vst:rack', r));
+  racks.on('param', (e) => send('vst:paramChange', e));
+  racks.on('meters', (m) => send('vst:meters', m));
+
+  ipcMain.handle('vst:plugins', () => scanner.plugins());
+  ipcMain.handle('vst:scanInfo', () => scanner.info());
+  ipcMain.handle('vst:rescan', () => {
+    scanner.scan(true);
+  });
+  ipcMain.handle('vst:setFolders', (_, folders) => {
+    scanner.setFolders(folders);
+  });
+  ipcMain.handle('vst:params', (_, name) => scanner.params(String(name)));
+  ipcMain.handle('vst:paramValues', (_, entry, slot) => racks.paramValues(entry, slot));
+  ipcMain.handle('vst:openEditor', async (_, entry, slot) => {
+    const err = await racks.openEditor(entry, slot);
+    if (err) console.warn('[vst] openEditor:', err);
+  });
+  ipcMain.handle('vst:saveState', () => racks.save().then(() => {}));
+  ipcMain.handle('vst:reload', (_, entry) => racks.reload(String(entry)));
+  ipcMain.handle('vst:rackStatus', () => racks.status);
+  ipcMain.handle('vst:deleted', () => racks.deleted());
+  ipcMain.handle('vst:restore', (_, name) => racks.restore(String(name)));
+  ipcMain.handle('vst:apply', (_, spec) => racks.apply(spec));
+  ipcMain.on('vst:events', (_, list) => host.sendEvents(list));
+  // tests only: the host answers these when started with JELLY_HOST_DEBUG=1 (debugCrash, debugRecord, debugRecordGet)
+  ipcMain.handle('vst:debug', (_, cmd, args) =>
+    /^debug[A-Z]\w*$/.test(String(cmd)) ? host.request(String(cmd), args && typeof args === 'object' ? args : {}).catch((e) => ({ error: e.message })) : null);
 
   ipcMain.handle('vst:status', () => host.state);
   ipcMain.handle('vst:stats', () => host.stats); // raw engine stats, for diagnostics and tests
@@ -223,8 +282,18 @@ function setupVst({ app, ipcMain, getWin }) {
   });
 
   host.start();
+  scanner.scan().catch((e) => console.warn('[vst] scan', e));
+  // save the rack before the host goes away
+  let quitting = false;
+  app.on('before-quit', (e) => {
+    if (quitting) return;
+    quitting = true;
+    e.preventDefault();
+    const done = () => app.quit();
+    Promise.race([racks.save().catch(() => {}), new Promise((r) => setTimeout(r, 3000))]).then(done, done);
+  });
   app.on('will-quit', () => host.stop());
-  return host;
+  return { host, scanner, racks };
 }
 
 module.exports = { setupVst, Host };

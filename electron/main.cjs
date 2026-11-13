@@ -8,7 +8,7 @@ const { setupVst } = require('./vst/host.cjs');
 const ORIGIN = 'jelly://app';
 const DIST = path.join(__dirname, '..', 'dist');
 const LIB = path.join(app.getPath('documents'), 'Strudel Jelly', 'samples');
-const SKETCHES = path.join(app.getPath('documents'), 'Strudel Jelly', 'sketches');
+const SKETCHES = process.env.JELLY_SKETCHES || path.join(app.getPath('documents'), 'Strudel Jelly', 'sketches');
 const CACHE =path.join(app.getPath('userData'), 'sound-cache');
 const AUDIO = /\.(wav|mp3|ogg|flac|aiff?|m4a|opus|webm)$/i;
 const TYPES = {
@@ -247,6 +247,7 @@ const mustSketch = (name) => {
   return f;
 };
 
+let vst = null; // { host, scanner, racks } (electron/vst/host.cjs)
 let lastWrite = 0; // when the app last changed the sketches folder itself
 const touched = () => { lastWrite = Date.now(); };
 const sketchOf = (file) => path.basename(file, '.js');
@@ -306,6 +307,10 @@ async function sketchRename(name, newName) {
     // case-only change (same file on Windows) renames in place; otherwise pick a free name
     const to = clean.toLowerCase() === name.toLowerCase() ? path.join(SKETCHES, clean + '.js') : await uniqueDest(SKETCHES, clean + '.js');
     await fsp.rename(from, to);
+    // the plugin state (.rack) goes with its sketch
+    const rack = from.slice(0, -3) + '.rack';
+    if (fs.existsSync(rack)) await fsp.rename(rack, to.slice(0, -3) + '.rack').catch((e) => console.warn('rack rename', e));
+    vst?.racks.renamed(name, sketchOf(to));
     return sketchOf(to);
   } finally {
     touched();
@@ -313,14 +318,21 @@ async function sketchRename(name, newName) {
 }
 
 async function sketchDuplicate(name) {
-  const code = await fsp.readFile(mustSketch(name), 'utf8');
-  return newSketch(cleanName(name) + ' copy', code);
+  const file = mustSketch(name);
+  const code = await fsp.readFile(file, 'utf8');
+  const copy = await newSketch(cleanName(name) + ' copy', code);
+  const rack = file.slice(0, -3) + '.rack';
+  if (fs.existsSync(rack)) await fsp.copyFile(rack, path.join(SKETCHES, copy + '.rack')).catch((e) => console.warn('rack copy', e));
+  return copy;
 }
 
 async function sketchDelete(name) {
   touched();
   try {
-    await shell.trashItem(mustSketch(name));
+    const file = mustSketch(name);
+    await shell.trashItem(file);
+    const rack = file.slice(0, -3) + '.rack';
+    if (fs.existsSync(rack)) await shell.trashItem(rack).catch((e) => console.warn('rack delete', e));
   } finally {
     touched();
   }
@@ -449,7 +461,7 @@ app.whenReady().then(() => {
   serveApp();
   watchLibrary();
   watchSketches();
-  setupVst({ app, ipcMain, getWin: () => win });
+  vst = setupVst({ app, ipcMain, getWin: () => win, sketchesDir: SKETCHES });
   createWindow();
 });
 app.on('window-all-closed', () => app.quit());

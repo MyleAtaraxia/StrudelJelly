@@ -1,32 +1,32 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
-// window.jelly.vst: see src/vst/CONTRACT.md. Parts that need plugin hosting (step 2+) are neutral stubs for now.
+// window.jelly.vst: see src/vst/CONTRACT.md. The engine is jelly-host (electron/vst/host.cjs), the plugin scan
+// (scanner.cjs) and the rack manager (rack.cjs).
 const on = (channel) => (fn) => {
   const h = (_, v) => fn(v);
   ipcRenderer.on(channel, h);
   return () => ipcRenderer.removeListener(channel, h);
 };
-const never = () => () => {};
 const vst = {
   status: () => ipcRenderer.invoke('vst:status'),
   onStatus: on('vst:status'),
   onBanner: on('vst:banner'),
-  plugins: async () => [],
-  scanInfo: async () => ({ found: 0, skipped: [], scanning: false, folders: [] }),
-  rescan: async () => {},
-  onScan: never,
-  setFolders: async () => {},
-  params: async () => [],
-  paramValues: async () => ({}),
-  onParamChange: never,
-  openEditor: async () => {},
-  saveState: async () => {},
-  reload: async () => {},
-  onRack: never,
-  rackStatus: async () => ({ sketch: '', entries: [], errors: [] }),
-  deleted: async () => [],
-  restore: async () => {},
-  onMeters: never,
+  plugins: () => ipcRenderer.invoke('vst:plugins'),
+  scanInfo: () => ipcRenderer.invoke('vst:scanInfo'),
+  rescan: () => ipcRenderer.invoke('vst:rescan'),
+  onScan: on('vst:scan'),
+  setFolders: (folders) => ipcRenderer.invoke('vst:setFolders', folders),
+  params: (pluginName) => ipcRenderer.invoke('vst:params', pluginName),
+  paramValues: (entry, slot) => ipcRenderer.invoke('vst:paramValues', entry, slot),
+  onParamChange: on('vst:paramChange'),
+  openEditor: (entry, slot) => ipcRenderer.invoke('vst:openEditor', entry, slot),
+  saveState: () => ipcRenderer.invoke('vst:saveState'),
+  reload: (entry) => ipcRenderer.invoke('vst:reload', entry),
+  onRack: on('vst:rack'),
+  rackStatus: () => ipcRenderer.invoke('vst:rackStatus'),
+  deleted: () => ipcRenderer.invoke('vst:deleted'),
+  restore: (name) => ipcRenderer.invoke('vst:restore', name),
+  onMeters: on('vst:meters'),
   audioDevices: () => ipcRenderer.invoke('vst:audioDevices'),
   audioSettings: () => ipcRenderer.invoke('vst:audioSettings'),
   setAudio: (s) => ipcRenderer.invoke('vst:setAudio', s),
@@ -39,6 +39,9 @@ const vst = {
   },
   _stats: () => ipcRenderer.invoke('vst:stats'),
   _setStreamLatency: (ms) => ipcRenderer.invoke('vst:setStreamLatency', ms),
+  _apply: (spec) => ipcRenderer.invoke('vst:apply', spec), // the evaluated rack (src/vst/runtime.js)
+  _events: (list) => ipcRenderer.send('vst:events', list), // timed MIDI / parameter events
+  _debug: (cmd, args) => ipcRenderer.invoke('vst:debug', cmd, args), // tests (JELLY_HOST_DEBUG=1)
 };
 
 contextBridge.exposeInMainWorld('jelly', {
