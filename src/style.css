@@ -195,6 +195,9 @@ button, input { font: inherit; color: inherit; }
 #editor .cm-editor.cm-focused { outline: none; }
 #editor .cm-scroller { line-height: 1.6; }
 #editor .cm-gutters { padding-left: 6px; }
+/* inline visuals (_scope(), _pianoroll(), ...) are canvases placed between lines: as blocks they take exactly their
+   height, which is what the editor measures (inline, the line box adds space below and the gutter drifts) */
+#editor .cm-content > canvas { display: block; }
 #editor .cm-tooltip, #editor .cm-tooltip-autocomplete {
   border: var(--j-frame-w) solid var(--j-frame) !important; border-radius: var(--r-md); overflow: hidden;
   background: var(--j-panel) !important; color: var(--j-ink); box-shadow: 0 3px 0 var(--j-frame);
