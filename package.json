@@ -55,6 +55,9 @@
     "asar": true,
     "electronDist": "node_modules/electron/dist",
     "electronVersion": "45.1.0",
+    "electronLanguages": [
+      "en-US"
+    ],
     "extraResources": [
       {
         "from": "host/bin/jelly-host.exe",
