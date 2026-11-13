@@ -245,7 +245,7 @@ class RackManager extends EventEmitter {
         let status = r?.status || (loading && !this.live.has(id) ? 'loading' : this.slotStatus.get(`${id}\t${i}`) || 'loading');
         if (!info) status = 'missing';
         const where = p.line ?? line;
-        if (!info) errors.push({ line: where, message: `"${p.name}" is not an installed VST3 plugin` });
+        if (!info) errors.push({ line: where, message: `"${p.name}" is not an installed plugin` });
         else if (r?.error) errors.push({ line: where, message: r.error });
         for (const e of r?.paramErrors || []) errors.push({ line: where, message: e });
         return { plugin: info?.name ?? p.name, slot: i, bypass: !!p.bypass, status };

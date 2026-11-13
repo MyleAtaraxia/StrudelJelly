@@ -10,7 +10,7 @@ export const VST_ENTRIES = [
     group: VST_GROUP,
     noPlay: true,
     synonyms: [],
-    desc: `<p>Declares your VST3 plugins by name. Each entry is one plugin, or a <code>[...]</code> chain of plugins. A chain can end with another entry's name, which sets where it goes by default.</p>
+    desc: `<p>Declares your VST3 and VST2 plugins by name. Each entry is one plugin, or a <code>[...]</code> chain of plugins. A chain can end with another entry's name, which sets where it goes by default.</p>
 <p>The first plugin decides how an entry is used: a synth is played with <code>.s("name")</code>, an effect receives audio through <code>.fx("name")</code>. There is no special master: <code>master</code> is an ordinary entry, and <code>all(x =&gt; x.fx("master"))</code> sends everything through it.</p>
 <p>The Mixer pane shows the same rack and edits this code for you. Entries that keep the same name keep running when you re-run.</p>`,
     params: [p('spec', 'Object', 'Entry names as keys, <code>vst(...)</code> or a chain as values.')],
@@ -30,7 +30,7 @@ $: s("bd*4, hh*8").fx("master")`,
     group: VST_GROUP,
     noPlay: true,
     synonyms: [],
-    desc: `<p>An installed VST3 plugin, by the name the scan found (<code>"One"</code>, <code>"Pro-L 2"</code>). Case is ignored and the vendor may come first (<code>"FabFilter One"</code>). File paths are not accepted.</p>
+    desc: `<p>An installed VST3 or VST2 plugin, by the name the scan found (<code>"One"</code>, <code>"Pro-L 2"</code>). Case is ignored and the vendor may come first (<code>"FabFilter One"</code>). File paths are not accepted. A plugin installed as both VST3 and VST2 is loaded as VST3.</p>
 <p>Use it inside <code>rack({...})</code>, or as an effect for one pattern only: <code>.fx(vst("Saturn 2"))</code>.</p>
 <p>Parameters are camelCase (<code>dryWet</code>) or the original name in quotes (<code>"Dry/Wet"</code>). Numbers use the parameter's own range, strings use the plugin's own units (<code>"-18 dB"</code>, <code>"1/8 D"</code>, <code>"Gemini"</code>). <code>bypass: true</code> turns the plugin off without removing it. Hover the plugin name for its card, Ctrl+click it to open the plugin window.</p>`,
     params: [

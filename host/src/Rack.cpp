@@ -1,4 +1,5 @@
 #include "Rack.h"
+#include "Bridge.h"
 #include "Pipe.h"
 #include <algorithm>
 #include <cmath>
@@ -33,6 +34,10 @@ private:
 
 Rack::Rack(Engine& e, Pipe& p) : engine(e), pipe(p) {
   formats.addFormat(std::make_unique<juce::VST3PluginFormat>());
+#if JUCE_PLUGINHOST_VST
+  if (auto bridge = makeBridgeFormat()) formats.addFormat(std::move(bridge)); // 32-bit .dll, ahead of VST2 (any .dll)
+  formats.addFormat(std::make_unique<juce::VSTPluginFormat>());
+#endif
   startTimerHz(20);
 }
 
@@ -45,7 +50,9 @@ Rack::~Rack() {
 
 // ---------- loading ----------
 std::unique_ptr<juce::AudioPluginInstance> Rack::load(const Slot& s, bool& synth, juce::String& err) {
+  // .vst3 is VST3, a 32-bit .dll goes through the bridge, anything else (.dll / .so) is VST2
   auto* fmt = formats.getFormat(0);
+  for (auto* f : formats.getFormats()) if (f->fileMightContainThisPluginType(s.path)) { fmt = f; break; }
   auto& descs = descCache[s.path];
   if (descs.isEmpty()) {
     Busy b(("scan\t0\t" + s.name).toRawUTF8());
@@ -149,7 +156,7 @@ void Rack::applyParams(Group& g, int slot, const juce::var& params) {
     for (auto& c : g.copies)
       if ((size_t) slot < c->insts.size() && c->insts[(size_t) slot]) c->insts[(size_t) slot]->plugin().getParameters()[m->index]->setValue(v);
     if (auto b = s.autoBase.find(m->index); b != s.autoBase.end()) b->second = v;
-    applied->setProperty(m->key, obj({ { "value", naturalValue(*prm, *m, v) }, { "text", prm->getText(v, 64) } }));
+    applied->setProperty(m->key, obj({ { "value", naturalValue(*prm, *m, v) }, { "text", paramText(*prm, *m, v) } }));
   }
 }
 
@@ -493,7 +500,7 @@ juce::var Rack::paramValues(const juce::String& group, int slot) {
   for (auto& m : it->second->slots[(size_t) slot].meta) {
     auto* prm = prms[m.index];
     const float v = prm->getValue();
-    out->setProperty(m.key, obj({ { "value", naturalValue(*prm, m, v) }, { "text", prm->getText(v, 64) } }));
+    out->setProperty(m.key, obj({ { "value", naturalValue(*prm, m, v) }, { "text", paramText(*prm, m, v) } }));
   }
   return res;
 }
@@ -687,7 +694,7 @@ void Rack::timerCallback() {
     if (n.gesture == 2)
       if (auto b = n.g->slots[(size_t) slot].autoBase.find(n.index); b != n.g->slots[(size_t) slot].autoBase.end()) b->second = v;
     pipe.send(obj({ { "event", "param" }, { "group", n.g->id }, { "slot", slot }, { "key", m->key },
-                    { "value", naturalValue(*prm, *m, v) }, { "text", prm->getText(v, 64) },
+                    { "value", naturalValue(*prm, *m, v) }, { "text", paramText(*prm, *m, v) },
                     { "gesture", n.gesture == 1 ? "begin" : n.gesture == 2 ? "end" : "change" } }));
   }
 

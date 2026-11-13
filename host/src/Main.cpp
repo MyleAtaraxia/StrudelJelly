@@ -1,9 +1,11 @@
 // jelly-host: Strudel Jelly's audio engine process. Electron starts it and talks to it over stdin/stdout
-// (Protocol.h). It owns the sound card and the VST3 plugins (Rack).
+// (Protocol.h). It owns the sound card and the VST3 / VST2 plugins (Rack); 32-bit VST2 plugins run in
+// jelly-bridge32.exe (Bridge.h).
 //
 // `jelly-host --scan <plugin.vst3>` is the scanner: it loads that one plugin file, prints what it holds (names, kind,
 // parameters) as one JSON line on stdout and exits. Electron runs one such child per plugin with a timeout, so a
 // plugin that hangs or crashes while scanning only takes its own child down.
+#include "Bridge.h"
 #include "Engine.h"
 #include "Params.h"
 #include "Pipe.h"
@@ -46,26 +48,50 @@ static void printLine(const juce::var& v) {
   platform::writeStdout(text.data(), text.size());
 }
 
-// --scan <path>: describe every plugin in one VST3 file
+// --scan <path>: describe every plugin in one plugin file (.vst3 is VST3, .dll / .so VST2)
+static void scanWith(juce::AudioPluginFormat& fmt, const char* format, const juce::String& path);
 static void scanFile(const juce::String& path) {
-  juce::VST3PluginFormat fmt;
+#if JUCE_PLUGINHOST_VST
+  if (!path.endsWithIgnoreCase(".vst3")) {
+    if (needsBridge(path))
+      if (auto bridge = makeBridgeFormat(true)) {
+        scanWith(*bridge, "VST2", path); // a 32-bit plugin, through jelly-bridge32
+        return;
+      }
+    juce::VSTPluginFormat vst2;
+    scanWith(vst2, "VST2", path);
+    return;
+  }
+#endif
+  juce::VST3PluginFormat vst3;
+  scanWith(vst3, "VST3", path);
+}
+
+static void scanWith(juce::AudioPluginFormat& fmt, const char* format, const juce::String& path) {
   juce::OwnedArray<juce::PluginDescription> descs;
-  fmt.findAllTypesForFile(descs, path);
+  {
+    Busy b("scan: open file");
+    fmt.findAllTypesForFile(descs, path);
+  }
   juce::Array<juce::var> plugins;
   for (auto* d : descs) {
     juce::String err;
+    Busy b1("scan: load");
     auto inst = fmt.createInstanceFromDescription(*d, 48000.0, 512, err);
+    Busy b2("scan: parameters");
     juce::var params = juce::Array<juce::var>();
+    juce::Array<juce::var> warnings;
     int ins = d->numInputChannels, outs = d->numOutputChannels;
     if (inst) {
+      for (auto& w : bridgeWarnings(*inst)) warnings.add(w);
       params = paramsToVar(describeParams(*inst));
       ins = inst->getTotalNumInputChannels();
       outs = inst->getTotalNumOutputChannels();
     }
     plugins.add(obj({ { "uid", d->createIdentifierString() }, { "name", d->name }, { "vendor", d->manufacturerName },
-                      { "kind", d->isInstrument ? "synth" : "effect" }, { "format", "VST3" }, { "path", path },
+                      { "kind", d->isInstrument ? "synth" : "effect" }, { "format", format }, { "path", path },
                       { "category", d->category }, { "version", d->version }, { "inputs", ins }, { "outputs", outs },
-                      { "params", params }, { "error", err } }));
+                      { "params", params }, { "error", err }, { "warnings", warnings } }));
     inst.reset();
   }
   printLine(obj({ { "plugins", plugins }, { "file", path }, { "exists", juce::File(path).existsAsFile() || juce::File(path).isDirectory() } }));
@@ -104,7 +130,7 @@ public:
     devices.addChangeListener(this);
     pipe.start();
     pipe.send(obj({ { "event", "hello" }, { "version", getApplicationVersion() }, { "maxStreams", proto::kMaxStreams },
-                    { "vst3", (bool) JUCE_PLUGINHOST_VST3 } }));
+                    { "vst3", (bool) JUCE_PLUGINHOST_VST3 }, { "vst2", (bool) JUCE_PLUGINHOST_VST } }));
     startTimer(250);
   }
 

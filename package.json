@@ -58,6 +58,14 @@
       {
         "from": "host/bin/jelly-host.exe",
         "to": "host/jelly-host.exe"
+      },
+      {
+        "from": "host/bin/jelly-bridge32.exe",
+        "to": "host/jelly-bridge32.exe"
+      },
+      {
+        "from": "LICENSE",
+        "to": "LICENSE.txt"
       }
     ]
   }

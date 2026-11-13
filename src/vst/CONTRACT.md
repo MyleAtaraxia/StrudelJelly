@@ -22,8 +22,8 @@ onStatus(fn: (s) => void): () => void
 onBanner(fn: (b: { kind: 'restarted' | 'quarantined', text: string }) => void): () => void
 
 // plugin catalogue (from the scan cache)
-plugins(): Array<{ uid: string, name: string, vendor: string, kind: 'synth' | 'effect', format: 'VST3', path: string }>
-scanInfo(): { found: number, skipped: Array<{ path: string, reason: string }>, scanning: boolean, folders: string[] }
+plugins(): Array<{ uid: string, name: string, vendor: string, kind: 'synth' | 'effect', format: 'VST3' | 'VST2', path: string }>   // VST2 copies of VST3 plugins are left out
+scanInfo(): { found: number, skipped: Array<{ path: string, reason: string }>, warnings: Array<{ name: string, warnings: string[] }>, scanning: boolean, folders: string[], defaults: string[] /* the standard folders */ }
 rescan(): void
 onScan(fn: (info) => void): () => void
 setFolders(folders: string[]): void
@@ -85,7 +85,7 @@ paramDiffs(entry: string, slot: number): Array<{ key: string, code: number | str
 
 ### Engine notes
 
-- **Plugin names** are the VST3 names without the vendor (`"One"`, `"Pro-L 2"`, as `plugins()` lists them). `vst()` and `params()` also accept the vendor in front (`"FabFilter One"`) and ignore case. RackStatus `chain[].plugin` is the listed name.
+- **Plugin names** are the VST3 / VST2 names without the vendor (`"One"`, `"Pro-L 2"`, as `plugins()` lists them). `vst()` and `params()` also accept the vendor in front (`"FabFilter One"`) and ignore case. RackStatus `chain[].plugin` is the listed name.
 - **Inline chains** (`.fx(vst(...))`, `.fx([...])`) are groups named `inline:<plugin+plugin>:<k>` (k counts chains with the same plugins in code order). `openEditor`, `paramValues` and `reload` take that name like an entry name; RackStatus `entries` and `onMeters` list rack entries only.
 - `renamed` is set only on the status of the evaluate that did the rename; listen with `onRack`.
 - `.set("entry", { ... })` is recognised when written in that form (a string and an object literal); the transpiler pass turns it into `.$st(...)`. Any other `.set(...)` is Strudel's own. Its values are never saved: the `.rack` file keeps the value each parameter returns to (`base`).

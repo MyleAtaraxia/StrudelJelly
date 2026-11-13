@@ -199,7 +199,7 @@ const fresh = () => ({ rack: null, rackPos: undefined, inline: new Map(), byObj:
 function makeVst(pos, name, params) {
   if (name instanceof Pattern) name = name.__pure;
   if (typeof name !== 'string' || !name.trim()) throw new LineError(lineOf(pos), 'vst() needs the name of an installed plugin, e.g. vst("Pro-Q 3")');
-  if (/[\\/]/.test(name) || /\.vst3$/i.test(name)) throw new LineError(lineOf(pos), `vst() takes an installed plugin's name, not a path: "${name}"`);
+  if (/[\\/]/.test(name) || /\.(vst3|vst|dll|so)$/i.test(name)) throw new LineError(lineOf(pos), `vst() takes an installed plugin's name, not a path: "${name}"`);
   const info = findPlugin(name);
   const out = {};
   let bypass = false;

@@ -357,7 +357,7 @@ export function initMixer({ editor, container, showSettings }) {
     btn.addEventListener('click', () => guard(() => addEntries(view(), s)));
     empty.append(
       h('b', 'mx-empty-title', 'Plugins live in your code'),
-      h('p', null, 'A rack({ ... }) block names your VST3 plugins. Play an instrument with .s("name"), or send sound through an effect with .fx("name"). This pane then shows each one, and edits the code for you.'),
+      h('p', null, 'A rack({ ... }) block names your VST3 and VST2 plugins. Play an instrument with .s("name"), or send sound through an effect with .fx("name"). This pane then shows each one, and edits the code for you.'),
       code,
       h('p', 'mx-empty-note', ps.length ? `${ps.length} plugins found on this computer.` : 'No plugins found yet. Add a folder or Rescan in Settings.'),
     );

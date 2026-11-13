@@ -1,7 +1,7 @@
 // Plugin parameters as code sees them: a camelCase key, the plugin's own name, and values in the parameter's own
 // range as the plugin displays it ("-18 dB" is -18, "1.20 kHz" is 1200), not VST3's normalized 0..1.
 //
-// VST3 only reports normalized values plus a text for each, so the natural range is read back from the texts:
+// VST3 and VST2 only report normalized values plus a text for each, so the natural range is read back from the texts:
 // min/max/default are the parsed texts at 0, 1 and the default. A code number is turned into a normalized value by
 // the plugin's own text-to-value conversion when that round-trips, and otherwise by bisection over the texts
 // (parameters are monotonic). Discrete parameters with non-numeric texts take an index or one of their choices.
@@ -21,6 +21,16 @@ struct ParamMeta {
   juce::StringArray choices;
   bool numeric = false;    // texts parse as numbers
   bool numericChoices = false;
+  // VST2 can only show the text of the current value, so its texts are sampled once at load (kTable points from 0 to
+  // 1) and looked up from here; choiceAt is each choice's normalized value when the choices come from that table
+  std::vector<juce::String> table;
+  std::vector<float> choiceAt;
+};
+constexpr int kTable = 401;
+// a parameter that can produce a whole text table in one go (the 32-bit bridge: one call instead of 2 * kTable)
+struct TextTableSource {
+  virtual ~TextTableSource() = default;
+  virtual juce::StringArray textTable(int points) = 0; // the text at `points` evenly spaced values from 0 to 1
 };
 
 std::vector<ParamMeta> describeParams(juce::AudioPluginInstance&);
@@ -32,5 +42,7 @@ juce::String camelKey(const juce::String& name);
 bool toNormalized(juce::AudioProcessorParameter&, const ParamMeta&, const juce::var& value, float& out, juce::String& err);
 // normalized -> the natural value code would write
 double naturalValue(juce::AudioProcessorParameter&, const ParamMeta&, float normalized);
+// the plugin's text for a normalized value (VST2: from the sampled table)
+juce::String paramText(juce::AudioProcessorParameter&, const ParamMeta&, float normalized);
 
 } // namespace jelly

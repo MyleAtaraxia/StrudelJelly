@@ -60,11 +60,74 @@ double canon(const Parsed& p, const juce::String& base) {
   return p.v;
 }
 
-juce::String textAt(juce::AudioProcessorParameter& p, float v) { return p.getText(v, 128); }
+int tableIndex(float v) { return juce::jlimit(0, kTable - 1, (int) std::lround(v * (kTable - 1))); }
+
+juce::String textAt(juce::AudioProcessorParameter& p, const ParamMeta& m, float v) {
+  if (!m.table.empty()) return m.table[(size_t) tableIndex(v)];
+  return p.getText(v, 128);
+}
+
+double finiteOrBig(double x) { return std::isfinite(x) ? x : (x < 0 ? -1e300 : x > 0 ? 1e300 : NaN); }
 
 double numAt(juce::AudioProcessorParameter& p, const ParamMeta& m, float v) {
-  const double x = canon(parse(textAt(p, v)), m.unit);
-  return std::isfinite(x) ? x : (x < 0 ? -1e300 : x > 0 ? 1e300 : NaN);
+  if (!m.table.empty()) {
+    // between two table points: linear between their numbers, so bisection still lands between them
+    const float x = juce::jlimit(0.0f, 1.0f, v) * (kTable - 1);
+    const int i = juce::jlimit(0, kTable - 2, (int) std::floor(x));
+    const double a = finiteOrBig(canon(parse(m.table[(size_t) i]), m.unit));
+    const double b = finiteOrBig(canon(parse(m.table[(size_t) i + 1]), m.unit));
+    const float f = x - (float) i;
+    if (std::isnan(a) || std::isnan(b) || std::abs(a) >= 1e299 || std::abs(b) >= 1e299) return f < 0.5f ? a : b;
+    return a + (b - a) * f;
+  }
+  return finiteOrBig(canon(parse(textAt(p, m, v)), m.unit));
+}
+
+// VST2: the plugin's display for each table point, read by moving the knob on a fresh instance and putting it back
+void sampleTable(juce::AudioProcessorParameter& p, ParamMeta& m) {
+  const float was = p.getValue();
+  const auto label = p.getLabel().trim();
+  m.table.resize(kTable);
+  juce::StringArray bulk;
+  if (auto* src = dynamic_cast<TextTableSource*>(&p)) bulk = src->textTable(kTable);
+  if (bulk.size() == kTable) {
+    for (int k = 0; k < kTable; ++k) {
+      auto t = bulk[k].trim();
+      if (label.isNotEmpty() && !t.endsWithIgnoreCase(label)) t << " " << label;
+      m.table[(size_t) k] = t;
+    }
+    return;
+  }
+  for (int k = 0; k < kTable; ++k) {
+    p.setValue((float) k / (float) (kTable - 1));
+    auto t = p.getCurrentValueAsText().trim();
+    if (label.isNotEmpty() && !t.endsWithIgnoreCase(label)) t << " " << label;
+    m.table[(size_t) k] = t;
+  }
+  p.setValue(was);
+}
+
+// a choice's normalized value, and the choice a normalized value falls in
+float choiceValue(const ParamMeta& m, int i) {
+  if (!m.choiceAt.empty()) return m.choiceAt[(size_t) juce::jlimit(0, (int) m.choiceAt.size() - 1, i)];
+  return m.steps > 1 ? (float) i / (float) (m.steps - 1) : 0.0f;
+}
+int choiceIndex(const ParamMeta& m, float v) {
+  if (m.choiceAt.empty()) return (int) std::round(v * (m.steps - 1));
+  int best = 0;
+  for (int i = 1; i < (int) m.choiceAt.size(); ++i)
+    if (std::abs(m.choiceAt[(size_t) i] - v) < std::abs(m.choiceAt[(size_t) best] - v)) best = i;
+  return best;
+}
+
+// VST2 text lookup (there is no plugin text parser to call): the middle of the table points showing this text
+float textSearch(const ParamMeta& m, const juce::String& s) {
+  int a = -1, b = -1;
+  for (int k = 0; k < kTable; ++k) {
+    const auto t = m.table[(size_t) k].trim();
+    if (t.equalsIgnoreCase(s) || t.startsWithIgnoreCase(s)) { if (a < 0) a = k; b = k; }
+  }
+  return a < 0 ? 0.0f : (float) (a + b) / 2.0f / (float) (kTable - 1);
 }
 
 float bisect(juce::AudioProcessorParameter& p, const ParamMeta& m, double x) {
@@ -108,6 +171,7 @@ juce::String camelKey(const juce::String& name) {
 
 std::vector<ParamMeta> describeParams(juce::AudioPluginInstance& inst) {
   std::vector<ParamMeta> out;
+  const bool vst2 = inst.getPluginDescription().pluginFormatName == "VST";
   const auto& ps = inst.getParameters();
   bool anyAutomatable = false;
   for (auto* p : ps) anyAutomatable |= p->isAutomatable();
@@ -122,6 +186,9 @@ std::vector<ParamMeta> describeParams(juce::AudioPluginInstance& inst) {
     auto key = camelKey(name);
     if (int k = ++used[key]; k > 1) key << k;
     m.key = key;
+    // VST2 has no default of its own: where the knob sits on a freshly loaded plugin
+    const float start = vst2 ? p.getValue() : p.getDefaultValue();
+    if (vst2) sampleTable(p, m);
     const int steps = p.getNumSteps();
     const bool discrete = p.isDiscrete() || p.isBoolean();
     m.steps = discrete && steps > 1 && steps < 0x7fffffff ? steps : 0;
@@ -130,34 +197,50 @@ std::vector<ParamMeta> describeParams(juce::AudioPluginInstance& inst) {
     // the canonical unit, from a spread of texts
     juce::StringArray units;
     for (int s = 0; s <= 10; ++s) {
-      const auto r = parse(textAt(p, (float) s / 10.0f));
+      const auto r = parse(textAt(p, m, (float) s / 10.0f));
       if (r.ok && r.unit.isNotEmpty()) units.addIfNotAlreadyThere(r.unit.toLowerCase());
     }
     if (units.contains("hz") || units.contains("khz")) m.unit = "Hz";
     else if (units.contains("ms") || units.contains("msec")) m.unit = "ms";
-    else m.unit = units.isEmpty() ? p.getLabel().trim() : parse(textAt(p, 0.5f)).unit;
+    else m.unit = units.isEmpty() ? p.getLabel().trim() : parse(textAt(p, m, 0.5f)).unit;
     if (m.unit.isEmpty()) m.unit = p.getLabel().trim();
 
     if (m.steps > 0 && m.steps <= 128) {
       m.numericChoices = true;
       for (int s = 0; s < m.steps; ++s) {
-        const auto t = textAt(p, (float) s / (float) (m.steps - 1));
+        const auto t = textAt(p, m, (float) s / (float) (m.steps - 1));
         m.choices.add(t);
         m.numericChoices &= parse(t).ok;
+      }
+    }
+    if (vst2 && m.steps == 0) {
+      // VST2 has no step count: a parameter whose texts are a few words ("Off", "16 bit") is a choice
+      juce::StringArray seen;
+      std::vector<std::pair<int, int>> span; // first and last table index of each text, in order
+      bool allNumeric = true;
+      for (int k = 0; k < kTable && seen.size() <= 64; ++k) {
+        const auto& t = m.table[(size_t) k];
+        allNumeric &= parse(t).ok;
+        if (seen.isEmpty() || seen[seen.size() - 1] != t) { seen.add(t); span.push_back({ k, k }); }
+        else span.back().second = k;
+      }
+      if (!allNumeric && seen.size() >= 2 && seen.size() <= 64) {
+        m.steps = seen.size();
+        m.choices = seen;
+        for (auto& [a, b] : span) m.choiceAt.push_back((float) (a + b) / 2.0f / (float) (kTable - 1));
       }
     }
     if (m.steps > 0 && !m.numericChoices) {
       m.numeric = false;
       m.min = 0;
       m.max = m.steps - 1;
-      m.def = std::round(p.getDefaultValue() * (m.steps - 1));
+      m.def = choiceIndex(m, start);
     } else {
       const auto at = [&](float v) {
         double x = numAt(p, m, v);
-        if (std::abs(x) >= 1e299) { // -inf dB and the like: report the nearest finite value
-          const float in = v < 0.5f ? v + 0.001f : v - 0.001f;
-          x = numAt(p, m, in);
-        }
+        // -inf dB and the like: report the nearest finite value (a whole table point in, where there is a table)
+        const float step = m.table.empty() ? 0.001f : 1.0f / (float) (kTable - 1);
+        for (int k = 1; k <= 8 && std::abs(x) >= 1e299; ++k) x = numAt(p, m, v < 0.5f ? v + (float) k * step : v - (float) k * step);
         return x;
       };
       const double a = at(0), b = at(1);
@@ -165,12 +248,12 @@ std::vector<ParamMeta> describeParams(juce::AudioPluginInstance& inst) {
       if (m.numeric) {
         m.min = std::min(a, b);
         m.max = std::max(a, b);
-        const double d = numAt(p, m, p.getDefaultValue());
+        const double d = numAt(p, m, start);
         m.def = std::isfinite(d) && std::abs(d) < 1e299 ? d : a;
       } else {
         m.min = 0;
         m.max = 1;
-        m.def = p.getDefaultValue();
+        m.def = start;
         m.unit = {};
       }
     }
@@ -214,8 +297,7 @@ const ParamMeta* findParam(const std::vector<ParamMeta>& ps, const juce::String&
 
 static bool fromNumber(juce::AudioProcessorParameter& p, const ParamMeta& m, double x, float& out) {
   if (m.steps > 0 && !m.numericChoices) {
-    const int idx = juce::jlimit(0, m.steps - 1, (int) std::lround(x));
-    out = m.steps > 1 ? (float) idx / (float) (m.steps - 1) : 0.0f;
+    out = choiceValue(m, juce::jlimit(0, m.steps - 1, (int) std::lround(x)));
     return true;
   }
   if (m.steps > 0 && m.numericChoices) {
@@ -225,7 +307,7 @@ static bool fromNumber(juce::AudioProcessorParameter& p, const ParamMeta& m, dou
       const double e = std::abs(canon(parse(m.choices[s]), m.unit) - x);
       if (e < be) { be = e; best = s; }
     }
-    out = m.steps > 1 ? (float) best / (float) (m.steps - 1) : 0.0f;
+    out = choiceValue(m, best);
     return true;
   }
   if (!m.numeric) {
@@ -236,7 +318,7 @@ static bool fromNumber(juce::AudioProcessorParameter& p, const ParamMeta& m, dou
   const float b = bisect(p, m, x);
   const double eb = std::abs(numAt(p, m, b) - x);
   // the plugin's own parser is exact where the texts are rounded; use it when it lands at least as close
-  const float v = juce::jlimit(0.0f, 1.0f, p.getValueForText(juce::String(x)));
+  const float v = m.table.empty() ? juce::jlimit(0.0f, 1.0f, p.getValueForText(juce::String(x))) : b;
   const double ev = std::abs(numAt(p, m, v) - x);
   out = std::isfinite(ev) && ev <= eb + 1e-9 ? v : b;
   return true;
@@ -252,14 +334,14 @@ bool toNormalized(juce::AudioProcessorParameter& p, const ParamMeta& m, const ju
     const auto s = value.toString().trim();
     for (int i = 0; i < m.choices.size(); ++i)
       if (m.choices[i].trim().equalsIgnoreCase(s)) {
-        out = m.steps > 1 ? (float) i / (float) (m.steps - 1) : 0.0f;
+        out = choiceValue(m, i);
         return true;
       }
     const auto r = parse(s);
     if (r.ok && m.numeric) return fromNumber(p, m, canon(r, m.unit), out);
     if (r.ok && m.numericChoices) return fromNumber(p, m, canon(r, m.unit), out);
-    const float v = juce::jlimit(0.0f, 1.0f, p.getValueForText(s));
-    const auto t = textAt(p, v).trim();
+    const float v = m.table.empty() ? juce::jlimit(0.0f, 1.0f, p.getValueForText(s)) : textSearch(m, s);
+    const auto t = textAt(p, m, v).trim();
     if (t.equalsIgnoreCase(s) || t.containsIgnoreCase(s) || (t.isNotEmpty() && s.containsIgnoreCase(t))) {
       out = v;
       return true;
@@ -272,11 +354,13 @@ bool toNormalized(juce::AudioProcessorParameter& p, const ParamMeta& m, const ju
 }
 
 double naturalValue(juce::AudioProcessorParameter& p, const ParamMeta& m, float v) {
-  if (m.steps > 0 && !m.numericChoices) return std::round(v * (m.steps - 1));
+  if (m.steps > 0 && !m.numericChoices) return choiceIndex(m, v);
   if (!m.numeric && !m.numericChoices) return v;
   const double x = numAt(p, m, v);
   if (std::isnan(x)) return m.min;
   return juce::jlimit(m.min, m.max, x);
 }
+
+juce::String paramText(juce::AudioProcessorParameter& p, const ParamMeta& m, float v) { return textAt(p, m, v); }
 
 } // namespace jelly

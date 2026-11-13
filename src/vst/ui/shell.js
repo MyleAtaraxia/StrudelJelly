@@ -3,7 +3,6 @@
 import { api, getScan, getStatus, onCatalogue, onStatus, startState, h } from './state.js';
 
 const BUFFERS = [128, 256, 512, 1024];
-const STANDARD_FOLDER = /Common Files[\\/]VST3[\\/]?$|[\\/]Audio[\\/]Plug-Ins[\\/]VST3[\\/]?$|[\\/]\.?vst3[\\/]?$/i;
 
 export function initShell({ getKnobs, setKnobs }) {
   const $ = (id) => document.getElementById(id);
@@ -115,11 +114,15 @@ export function initShell({ getKnobs, setKnobs }) {
   function renderPlugins() {
     const sc = getScan();
     const s = status();
-    found.textContent = sc ? `${sc.found} VST3 ${sc.found === 1 ? 'plugin' : 'plugins'} found` : 'Looking for plugins...';
-    const sk = sc?.skipped || [];
-    skipped.hidden = !sk.length && !sc?.scanning;
-    skipped.textContent = sc?.scanning ? 'Scanning...' : `${sk.length} skipped`;
-    skipped.title = sc?.scanning ? '' : sk.map((x) => `${x.path.split(/[\\/]/).pop()}: ${x.reason}`).join('\n');
+    found.textContent = sc ? `${sc.found} ${sc.found === 1 ? 'plugin' : 'plugins'} found` : 'Looking for plugins...';
+    const sk = sc?.skipped || [], warn = sc?.warnings || [];
+    skipped.hidden = !sk.length && !warn.length && !sc?.scanning;
+    skipped.textContent = sc?.scanning ? 'Scanning...'
+      : [sk.length && `${sk.length} skipped`, warn.length && `${warn.length} with warnings`].filter(Boolean).join(', ');
+    skipped.title = sc?.scanning ? '' : [
+      ...sk.map((x) => `${x.path.split(/[\\/]/).pop()}: ${x.reason}`),
+      ...warn.map((x) => `${x.name}: ${x.warnings.join('; ')}`),
+    ].join('\n');
     rescan.disabled = !!sc?.scanning || !s || s.state === 'down';
     rescan.textContent = sc?.scanning ? 'Scanning' : 'Rescan';
     foldersBtn.disabled = !s || s.state === 'down';
@@ -137,12 +140,13 @@ export function initShell({ getKnobs, setKnobs }) {
     renderFolders();
   };
   function renderFolders() {
-    folders = getScan()?.folders || folders;
+    const sc = getScan();
+    folders = sc?.folders || folders;
     foldersBox.replaceChildren();
     for (const f of folders) {
       const row = h('div', 'plug-folder');
       row.append(h('code', null, f));
-      if (STANDARD_FOLDER.test(f)) row.append(h('small', null, 'standard'));
+      if (sc?.defaults?.some((d) => d.toLowerCase() === f.toLowerCase())) row.append(h('small', null, 'standard'));
       else {
         const x = h('button', 'head-btn sq', '\u00d7');
         x.type = 'button';
@@ -156,7 +160,7 @@ export function initShell({ getKnobs, setKnobs }) {
     const add = h('div', 'plug-folder-add');
     const input = h('input');
     input.type = 'text';
-    input.placeholder = 'C:\\Path\\to\\VST3 folder';
+    input.placeholder = 'C:\\Path\\to\\plugin folder';
     input.spellcheck = false;
     input.setAttribute('aria-label', 'Plugin folder to add');
     const go = h('button', 'head-btn', 'Add');
