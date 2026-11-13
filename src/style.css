@@ -83,7 +83,7 @@ button, input { font: inherit; color: inherit; }
 .brand { display: flex; align-items: center; gap: var(--sp-2); }
 .brand-name { font-family: Fredoka, sans-serif; font-weight: 500; font-size: var(--fs-lg); }
 .brand-name b { font-weight: 600; }
-.logo-dot { width: 26px; height: 22px; border-radius: 50% 50% 42% 42% / 62% 62% 38% 38%; background: var(--j-pink); border: var(--j-line) solid var(--j-edge); box-shadow: inset 4px 3px 0 -1px #FFFFFF99; }
+.logo-mascot { height: 30px; width: auto; display: block; }
 /* the pane switch matches the transport pill's 45px height so both sit at the same offset from the top */
 .titlebar .segmented button { height: 41px; }
 .titlebar-right { justify-self: end; margin-right: 150px; /* window controls */ }
