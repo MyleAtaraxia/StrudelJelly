@@ -13,17 +13,6 @@
 
 ![Typing a rack with VST3 plugins, playing it, and editing it live](docs/demo.gif)
 
-```js
-rack({
-  pad:    vst("Vital"),
-  verb:   [vst("ValhallaSupermassive", { mix: .4 }), "master"],
-  master: vst("Pro-L 2"),
-})
-
-$: note("<c3 eb3 g3>").s("pad").fx("verb")
-$: s("bd*4, hh*8").fx("master")
-```
-
 ## Features
 
 - **Hot reload.** The music updates as you type, and code that doesn't parse yet is skipped.
