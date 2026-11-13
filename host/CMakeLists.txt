@@ -15,6 +15,20 @@ FetchContent_Declare(JUCE
   GIT_PROGRESS TRUE)
 FetchContent_MakeAvailable(JUCE)
 
+# ASIO SDK 2.3.4 (Steinberg, dual licensed: proprietary or GPLv3; we use it under GPLv3, which AGPL-3.0 code may be
+# combined with). Only its headers are used; JUCE implements the host side. Set JELLY_ASIO=OFF to build without it.
+option(JELLY_ASIO "Build the ASIO driver (Windows)" ON)
+if(WIN32 AND JELLY_ASIO)
+  FetchContent_Declare(asiosdk
+    URL https://download.steinberg.net/sdk_downloads/ASIO-SDK_2.3.4_2025-10-15.zip
+    URL_HASH SHA256=d5ebf0c20dd2c5f43771fd0c1418f4b361bf52434ee670097cfa6b3a335e2eca
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+  FetchContent_MakeAvailable(asiosdk)
+  set(JELLY_HAS_ASIO 1)
+else()
+  set(JELLY_HAS_ASIO 0)
+endif()
+
 juce_add_gui_app(jelly-host
   PRODUCT_NAME "jelly-host"
   COMPANY_NAME "Strudel Jelly"
@@ -30,6 +44,9 @@ endif()
 target_sources(jelly-host PRIVATE
   src/Main.cpp
   src/Engine.cpp
+  src/Params.cpp
+  src/Plugin.cpp
+  src/Rack.cpp
   src/StreamInput.cpp
   src/Pipe.cpp
   ${PLATFORM_SOURCES})
@@ -39,7 +56,7 @@ target_compile_definitions(jelly-host PRIVATE
   JUCE_PLUGINHOST_AU=0
   JUCE_PLUGINHOST_LADSPA=0
   JUCE_PLUGINHOST_LV2=0
-  JUCE_ASIO=0
+  JUCE_ASIO=${JELLY_HAS_ASIO}
   JUCE_WASAPI=1
   JUCE_DIRECTSOUND=1
   JUCE_WEB_BROWSER=0
@@ -47,6 +64,10 @@ target_compile_definitions(jelly-host PRIVATE
   JUCE_USE_CAMERA=0
   JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:jelly-host,JUCE_PRODUCT_NAME>"
   JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:jelly-host,JUCE_VERSION>")
+
+if(JELLY_HAS_ASIO)
+  target_include_directories(jelly-host PRIVATE ${asiosdk_SOURCE_DIR}/common)
+endif()
 
 target_link_libraries(jelly-host PRIVATE
   juce::juce_audio_utils
