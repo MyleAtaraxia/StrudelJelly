@@ -153,6 +153,23 @@ t('removeEntry and restoreEntry round trip', () => {
   assert.deepEqual(entries(text(w))[1].plugins.map((p) => p.name), ['X', 'Y']);
 });
 
+t('restoreEntry goes back between its old neighbours', () => {
+  const v = make(BASIC);
+  const src = R.removeEntry(v, 'bass');
+  R.restoreEntry(v, 'bass', src, { after: 'pad', before: 'verb' });
+  assert.equal(text(v), BASIC.replace('bass:   vst', 'bass: vst'));
+  const w = make(BASIC);
+  R.removeEntry(w, 'pad');
+  R.restoreEntry(w, 'pad', 'Vital', { after: null, before: 'bass' });
+  assert.deepEqual(entries(text(w)).map((e) => e.name), ['pad', 'bass', 'verb', 'master']);
+  assert.match(text(w), /^rack\(\{\n  pad: vst\("Vital"\),\n  bass:/);
+  const x = make(`rack({ a: vst("A"), b: vst("B") })`);
+  R.restoreEntry(x, 'c', 'C', { after: 'gone', before: 'b' });
+  assert.equal(text(x), `rack({ a: vst("A"), c: vst("C"), b: vst("B") })`);
+  R.restoreEntry(x, 'd', 'D', { after: 'gone', before: 'gone2' });
+  assert.equal(text(x), `rack({ a: vst("A"), c: vst("C"), b: vst("B"), d: vst("D") })`);
+});
+
 t('renameEntry also renames .s / .fx / .set uses and chain tails', () => {
   const doc = `rack({ verb: vst("V"), a: [vst("A"), "verb"] })\n$: s("x").fx("verb").fx(["verb", vst("Q")]).set("verb", { mix: .3 })\n$: s("verb")`;
   assert.equal(

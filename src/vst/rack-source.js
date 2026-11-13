@@ -238,11 +238,21 @@ const valueOf = (plugins) => {
 };
 
 // list: [[name, plugins]], plugins = a plugin name, an array of names, or source text like `vst("A")` / `[vst("A"), "x"]`
-function planAddEntries(state, list) {
+// at: { after, before } entry names to place the new entries between (the first one still in the rack wins); default end
+function planAddEntries(state, list, at) {
   const rack = findRack(state);
   const props = list.map(([name, plugins]) => `${keyText(name)}: ${valueOf(plugins)}`);
   if (rack) {
     for (const [name] of list) if (rack.entries.some((e) => e.name === name)) throw new Error(`"${name}" is already in the rack`);
+    const idx = (n) => (n == null ? -1 : rack.entries.findIndex((e) => e.name === n));
+    const i = idx(at?.after) >= 0 ? idx(at.after) + 1 : idx(at?.before);
+    if (i >= 0 && i < rack.entries.length) {
+      // in front of entry i, with the same separator that already sits in front of it
+      const ref = rack.entries[i];
+      const lead = state.sliceDoc(i ? rack.entries[i - 1].to : rack.objFrom + 1, ref.from);
+      const gap = /[,{]?(\s*)$/.exec(lead.replace(/^[^,]*,/, ''))[1] || ' ';
+      return [{ from: ref.from, insert: props.map((p) => `${p},${gap}`).join('') }];
+    }
     if (!rack.entries.length) {
       const inner = state.sliceDoc(rack.objFrom + 1, rack.objTo - 1);
       const multi = /\n/.test(inner) || !inner.trim();
@@ -260,9 +270,9 @@ function planAddEntries(state, list) {
   // no rack yet: above the first pattern line (or at the end)
   const text = state.doc.toString();
   const m = /^[ \t]*(?:\$|[A-Za-z_]\w*)[ \t]*:/m.exec(text);
-  const at = m ? m.index : text.length;
-  const lead = at > 0 && text[at - 1] !== '\n' ? '\n' : '';
-  return [{ from: at, insert: `${lead}rack({\n${props.map((p) => `  ${p},\n`).join('')}})\n\n` }];
+  const pos = m ? m.index : text.length;
+  const lead = pos > 0 && text[pos - 1] !== '\n' ? '\n' : '';
+  return [{ from: pos, insert: `${lead}rack({\n${props.map((p) => `  ${p},\n`).join('')}})\n\n` }];
 }
 const planAddEntry = (state, name, plugins) => planAddEntries(state, [[name, plugins]]);
 
@@ -319,10 +329,11 @@ export function removeEntry(view, name) {
   return text;
 }
 // put a removed entry back from its source text (or its plugin names)
-export function restoreEntry(view, name, sourceOrPlugins) {
+// at: { after, before } neighbour names from where it was, so it goes back in the same place
+export function restoreEntry(view, name, sourceOrPlugins, at) {
   const src = typeof sourceOrPlugins === 'string' ? sourceOrPlugins : null;
   const m = src && /^(?:"[^"]*"|'[^']*'|[\w$]+)\s*:\s*([\s\S]*)$/.exec(src);
-  return addEntry(view, name, m ? m[1] : sourceOrPlugins);
+  return run(view, planAddEntries(view.state, [[name, m ? m[1] : sourceOrPlugins]], at));
 }
 // a free entry name based on `base`
 export function uniqueName(state, base) {

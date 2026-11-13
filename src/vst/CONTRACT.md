@@ -41,7 +41,7 @@ reload(entry: string): void  // reload a crashed entry
 // rack status, sent after every applied rack and on crash/missing changes
 onRack(fn: (r: RackStatus) => void): () => void
 rackStatus(): RackStatus
-deleted(): Array<{ name: string, plugins: string[], deletedAt: number }>   // restorable for 10 minutes
+deleted(): Array<{ name: string, plugins: string[], deletedAt: number, after: string | null, before: string | null }>   // restorable for 10 minutes; after/before = its neighbours when deleted
 restore(name: string): { name: string, plugins: string[] } | null  // the next evaluate that has this entry gets its state back
 
 // meters, ~20 Hz: peak per entry copy summed per entry, 0..1 linear (rack entries only)

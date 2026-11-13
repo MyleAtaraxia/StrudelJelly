@@ -211,7 +211,11 @@ class RackManager extends EventEmitter {
           const saved = this.file.entries[id] || [];
           const keep = slots.map((s, i) => (s.state ? { plugin: s.plugin, state: s.state, base: s.base } : saved[i] || { plugin: s.plugin }));
           this.file.deleted = this.file.deleted.filter((d) => d.name !== id);
-          this.file.deleted.push({ name: id, plugins, deletedAt: Date.now(), slots: keep });
+          // its neighbours in the old code, so Restore can put it back in the same place
+          const at = this.prev.findIndex((o) => o.name === id);
+          const after = this.prev.slice(0, at).reverse().find((o) => !reply.removed[o.name])?.name ?? null;
+          const before = this.prev.slice(at + 1).find((o) => !reply.removed[o.name])?.name ?? null;
+          this.file.deleted.push({ name: id, plugins, deletedAt: Date.now(), slots: keep, after, before });
           delete this.file.entries[id];
         }
       }
@@ -316,7 +320,7 @@ class RackManager extends EventEmitter {
   deleted() {
     const now = Date.now();
     this.file.deleted = this.file.deleted.filter((d) => now - d.deletedAt < DELETED_TTL);
-    return this.file.deleted.map(({ name, plugins, deletedAt }) => ({ name, plugins, deletedAt }));
+    return this.file.deleted.map(({ name, plugins, deletedAt, after, before }) => ({ name, plugins, deletedAt, after: after ?? null, before: before ?? null }));
   }
 
   // the next apply that has an entry by this name gets the deleted entry's state back

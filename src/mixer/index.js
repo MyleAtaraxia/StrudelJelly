@@ -5,7 +5,7 @@ import {
   findRack, addPlugin, removePlugin, movePlugin, setBypass, isBypassed, addEntry, addEntries, removeEntry, restoreEntry, uniqueName,
 } from '../vst/rack-source.js';
 import {
-  api, lastRack, onRack, getPlugins, getScan, getStatus, onCatalogue, onStatus, findPlugin, kindOf, h, chip, I, ICON,
+  api, lastRack, onRack, getPlugins, getScan, getStatus, onCatalogue, onStatus, findPlugin, h, chip, I, ICON,
 } from '../vst/ui/state.js';
 import './mixer.css';
 
@@ -50,7 +50,7 @@ export function initMixer({ editor, container, showSettings }) {
     if (!rack) return { rack: null, cards: [] };
     const cards = rack.entries.map((e) => {
       const s = st?.entries.find((x) => x.name === e.name);
-      const kind = s?.kind || (e.plugins[0] ? kindOf(e.plugins[0].name) : 'effect');
+      const kind = (e.plugins[0] && findPlugin(e.plugins[0].name)?.kind) || s?.kind || 'effect';
       return {
         name: e.name,
         line: view().state.doc.lineAt(e.from).number,
@@ -192,8 +192,10 @@ export function initMixer({ editor, container, showSettings }) {
   }
   const doAddPlugin = (card, p) => guard(() => addPlugin(view(), card.name, p.name));
   const doRemoveEntry = (card) => guard(() => {
+    const names = findRack(view().state)?.entries.map((e) => e.name) || [];
+    const i = names.indexOf(card.name);
     const src = removeEntry(view(), card.name);
-    removed.set(card.name, { src, at: Date.now(), plugins: card.chain.map((c) => c.name) });
+    removed.set(card.name, { src, at: Date.now(), plugins: card.chain.map((c) => c.name), after: names[i - 1] ?? null, before: names[i + 1] ?? null });
   });
 
   // ---------- cards ----------
@@ -375,8 +377,8 @@ export function initMixer({ editor, container, showSettings }) {
     const now = Date.now();
     for (const [n, r] of removed) if (now - r.at > AGAIN) removed.delete(n);
     const seen = new Map();
-    for (const d of deleted) if (!inCode.has(d.name)) seen.set(d.name, { name: d.name, plugins: d.plugins, at: d.deletedAt });
-    for (const [n, r] of removed) if (!inCode.has(n) && !seen.has(n)) seen.set(n, { name: n, plugins: r.plugins, at: r.at });
+    for (const d of deleted) if (!inCode.has(d.name)) seen.set(d.name, { name: d.name, plugins: d.plugins, at: d.deletedAt, after: d.after, before: d.before });
+    for (const [n, r] of removed) if (!inCode.has(n) && !seen.has(n)) seen.set(n, { name: n, plugins: r.plugins, at: r.at, after: r.after, before: r.before });
     const items = [...seen.values()].sort((a, b) => b.at - a.at);
     deletedEl.hidden = !items.length;
     deletedEl.replaceChildren();
@@ -396,7 +398,8 @@ export function initMixer({ editor, container, showSettings }) {
         if (!plugins?.length && !local) return render(true);
         guard(() => {
           const name = findRack(view().state)?.entries.some((e) => e.name === d.name) ? uniqueName(view().state, d.name) : d.name;
-          restoreEntry(view(), name, local?.src ?? plugins);
+          const at = local ? { after: local.after, before: local.before } : { after: d.after, before: d.before };
+          restoreEntry(view(), name, local?.src ?? plugins, at);
           removed.delete(d.name);
         });
       });
