@@ -25,6 +25,7 @@
       <div class="readout">
         <span class="tempo" id="tempo" data-testid="tempo" title="Tempo, assuming 4 beats per cycle (BPM = cycles per minute x 4)"></span>
         <span class="cycle" id="cycle" data-testid="cycle" title="Cycles played since Play">cycle <b>0</b></span>
+        <span class="vst-cpu" id="vst-cpu" data-testid="vst-cpu" hidden>CPU <span class="vst-cpu-bar"><i></i></span><span class="vst-cpu-val"></span></span>
       </div>
       <span class="update-hint" id="update-hint" data-testid="update-hint" hidden>Ctrl+Enter to update</span>
     </div>
@@ -38,6 +39,9 @@
         </button>
         <button type="button" data-pane="docs" data-testid="pane-docs" aria-label="Docs" title="Docs (F1 on a function, Ctrl+K searches everything)" aria-pressed="false">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5zM12 6.5v13"></path></svg>
+        </button>
+        <button type="button" data-pane="mixer" data-testid="pane-mixer" aria-label="Mixer" title="Mixer: your VST plugins" aria-pressed="false">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4v16M12 4v16M18 4v16"></path><rect x="3.5" y="12" width="5" height="3" rx="1.2" fill="currentColor"></rect><rect x="9.5" y="7" width="5" height="3" rx="1.2" fill="currentColor"></rect><rect x="15.5" y="14" width="5" height="3" rx="1.2" fill="currentColor"></rect></svg>
         </button>
         <button type="button" data-pane="settings" data-testid="pane-settings" aria-label="Settings" title="Settings" aria-pressed="false">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M16 5v4M8 15v4"></path></svg>
@@ -60,6 +64,10 @@
           <span class="status-vim" id="status-vim" data-testid="status-vim" hidden></span>
           <span class="status-cursor" id="status-cursor" data-testid="status-cursor">Ln 1, Col 1</span>
         </span>
+      </div>
+      <div class="vst-banner" id="vst-banner" data-testid="vst-banner" role="status" hidden>
+        <span class="vst-banner-text"></span>
+        <button type="button" class="head-btn" data-testid="vst-banner-dismiss">Dismiss</button>
       </div>
       <div class="editor-body">
         <canvas id="test-canvas"></canvas>
@@ -97,6 +105,7 @@
       </div>
 
       <div class="pane pane-docs" id="pane-docs" aria-label="Docs" hidden></div>
+      <div class="pane pane-mixer" id="pane-mixer" aria-label="Mixer" hidden></div>
 
       <div class="pane pane-settings" id="pane-settings" aria-label="Settings" hidden>
       <div class="panel-head"><span class="panel-title">Settings</span></div>
@@ -133,6 +142,34 @@
         <label class="set-row toggle-row"><span class="set-label">Hot reload</span><input type="checkbox" class="toggle" id="hot-setting" data-testid="hot-setting"></label>
         <label class="set-row toggle-row"><span class="set-label">Piano roll</span><input type="checkbox" class="toggle" id="viz-setting" data-testid="viz-setting"></label>
         <label class="set-row toggle-row"><span class="set-label">Line numbers</span><input type="checkbox" class="toggle" data-setting="isLineNumbersDisplayed"></label>
+      </section>
+
+      <section class="set-group" id="set-audio" data-testid="set-audio">
+        <h3>Audio</h3>
+        <p class="set-note set-error" id="audio-down" data-testid="audio-down" hidden></p>
+        <div class="set-row">
+          <span class="set-label" id="out-label">Output</span>
+          <select class="select" id="audio-device" data-testid="audio-device" aria-labelledby="out-label"></select>
+        </div>
+        <div class="set-row">
+          <span class="set-label" id="drv-label">Driver</span>
+          <div id="audio-driver" data-testid="audio-driver"></div>
+        </div>
+        <div class="set-row">
+          <span class="set-label" id="buf-label">Buffer<small id="buf-delay" data-testid="buf-delay"></small></span>
+          <div class="segmented" id="audio-buffer" data-testid="audio-buffer" role="radiogroup" aria-labelledby="buf-label"></div>
+        </div>
+      </section>
+
+      <section class="set-group" id="set-plugins" data-testid="set-plugins">
+        <h3>Plugins</h3>
+        <div class="set-row">
+          <span class="set-label"><span id="plug-found" data-testid="plug-found"></span><small id="plug-skipped" data-testid="plug-skipped"></small></span>
+          <button type="button" class="head-btn" id="plug-rescan" data-testid="plug-rescan">Rescan</button>
+        </div>
+        <label class="set-row toggle-row"><span class="set-label">Plugin knobs update code<small>Only values already written in code</small></span><input type="checkbox" class="toggle" id="knobs-setting" data-testid="knobs-setting"></label>
+        <div class="set-row"><span class="set-label">Plugin folders</span><button type="button" class="head-btn" id="plug-folders-edit" data-testid="plug-folders-edit">Edit</button></div>
+        <div class="plug-folders" id="plug-folders" data-testid="plug-folders" hidden></div>
       </section>
 
       <section class="set-group">

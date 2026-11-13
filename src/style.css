@@ -348,3 +348,24 @@ button, input { font: inherit; color: inherit; }
   border: 2.5px solid transparent; border-radius: var(--r-pill);
 }
 *::-webkit-scrollbar-thumb:hover { background: var(--j-frame); background-clip: padding-box; }
+
+/* ---------- settings: audio and plugin groups ---------- */
+.select {
+  height: 28px; min-width: 0; max-width: 180px; padding: 0 28px 0 var(--sp-3); cursor: pointer; text-overflow: ellipsis;
+  appearance: none; border: var(--j-frame-w) solid var(--j-frame); border-radius: var(--r-pill); color: var(--j-ink);
+  background: var(--j-field) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A89AA0' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center / 14px;
+  font-weight: var(--fw-label); font-size: var(--fs-sm);
+}
+.select:disabled, .segmented button:disabled, .toggle:disabled { opacity: .45; cursor: default; }
+.set-error { padding: var(--sp-1) var(--sp-3); border-radius: var(--r-sm); border: 2px solid var(--j-edge); background: var(--j-red); color: #2B2430; font-size: var(--fs-xs); font-weight: var(--fw-label); }
+#plug-skipped { cursor: help; }
+.plug-folders { display: flex; flex-direction: column; gap: var(--sp-1); }
+.plug-folder { display: flex; align-items: center; gap: var(--sp-2); min-height: 26px; font-size: var(--fs-xs); }
+.plug-folder code { flex: 1; min-width: 0; overflow-wrap: anywhere; font-family: "Cascadia Code", Consolas, monospace; user-select: text; }
+.plug-folder small { color: var(--j-soft); }
+.plug-folder-add { display: flex; gap: var(--sp-2); }
+.plug-folder-add input {
+  flex: 1; min-width: 0; height: 28px; padding: 0 var(--sp-3); border: var(--j-frame-w) solid var(--j-frame); border-radius: var(--r-pill); background: var(--j-field);
+  color: var(--j-ink); font-size: var(--fs-xs); outline: 0; user-select: text;
+}
+.plug-folder-add input:focus { box-shadow: 0 0 0 3px var(--j-sky); }

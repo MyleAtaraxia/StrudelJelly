@@ -4,6 +4,9 @@ import { createSketches } from './sketches.js';
 import { createViz, ZOOM_LEVELS, ROW_ZOOM_LEVELS } from './viz.js';
 import { initSounds } from './sounds/index.js';
 import { initDocs } from './docs/index.js';
+import { initVstUi } from './vst/ui/index.js';
+import { initShell } from './vst/ui/shell.js';
+import { initMixer } from './mixer/index.js';
 import { getCM } from '@replit/codemirror-vim';
 
 const $ = (id) => document.getElementById(id);
@@ -92,6 +95,7 @@ const EDITOR_DEFAULTS = {
   vizHeight: 170,
   hotReload: true,
   keybindings: 'codemirror', // or 'vim'
+  vstKnobsUpdateCode: false, // plugin knobs rewrite values already written in the rack
 };
 let prefs;
 try {
@@ -179,6 +183,9 @@ editor = createEditor({
     renderTransport();
   },
 });
+// VST: autocomplete, status pills, hover card, Ctrl+click and knobs-to-code (src/vst/ui); the Mixer pane is below
+const vstUi = initVstUi({ editor, getKnobsPref: () => prefs.vstKnobsUpdateCode });
+let mixer = null;
 viz = createViz({
   panel: $('main-col'), strip: $('viz'), canvas: $('viz-canvas'), scheduler: () => editor.repl.scheduler,
   // hovering a note lights up the code that made it, clicking jumps there (positions are only valid for unchanged code)
@@ -192,6 +199,7 @@ viz.setVisible(prefs.visualStrip);
 renderTempo();
 renderTransport();
 onDocChange(editor, renderTransport);
+onDocChange(editor, () => { vstUi?.hide(); mixer?.onDocChange(); });
 onSelectionChange(editor, renderCursor);
 renderCursor();
 
@@ -341,6 +349,8 @@ const sketches = createSketches({
     evalCode = editor.code;
     if (loaded) refreshPattern();
     renderTransport();
+    vstUi?.refresh();
+    mixer?.refresh();
   },
   onSaveState: (st) => {
     const el = $('save-state');
@@ -429,13 +439,22 @@ function showPane(name) {
   $('pane-sounds-wrap').hidden = name !== 'sounds';
   $('pane-settings').hidden = name !== 'settings';
   $('pane-docs').hidden = name !== 'docs';
+  $('pane-mixer').hidden = name !== 'mixer';
   if (name === 'settings') refreshOffline();
   if (name === 'sketches') sketches.refresh();
+  if (name === 'mixer') mixer?.refresh();
   store.set('jelly-pane', name || '');
 }
+if (!jelly.vst) document.querySelector('[data-pane=mixer]').hidden = true;
 document.querySelectorAll('[data-pane]').forEach((b) =>
   b.addEventListener('click', () => showPane(pane === b.dataset.pane ? null : b.dataset.pane)),
 );
+
+mixer = initMixer({ editor, container: $('pane-mixer'), showSettings: () => showPane('settings') });
+const vstShell = initShell({
+  getKnobs: () => prefs.vstKnobsUpdateCode,
+  setKnobs: (on) => { prefs.vstKnobsUpdateCode = on; savePrefs(); },
+});
 
 const sounds = initSounds({ editor, store, jelly, container: $('pane-sounds'), showSounds: () => pane !== 'sounds' && showPane('sounds') });
 
@@ -456,7 +475,12 @@ const docs = initDocs({
     { label: 'Show sketches', run: () => showPane('sketches') },
     { label: 'Show sounds', run: () => showPane('sounds') },
     { label: 'Show docs', hint: 'F1', run: () => { showPane('docs'); docs.focusSearch(); } },
+    { label: 'Show mixer', run: () => showPane('mixer') },
     { label: 'Show settings', run: () => showPane('settings') },
+    ...(jelly.vst ? [
+      { label: 'Rescan plugins', run: () => jelly.vst.rescan() },
+      ...mixer.cards().map((c) => ({ label: `Open plugin editor: ${c.name}`, hint: c.chain.map((p) => p.name).join(' > '), run: () => jelly.vst.openEditor(c.name, 0) })),
+    ] : []),
     { label: 'Hide side panel', run: () => showPane(null) },
     { label: prefs.visualStrip ? 'Hide piano roll' : 'Show piano roll', run: () => setViz(!prefs.visualStrip) },
     { label: 'Piano roll: follow the playhead', run: () => viz.follow() },
