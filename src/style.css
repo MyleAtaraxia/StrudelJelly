@@ -100,7 +100,6 @@ button, input { font: inherit; color: inherit; }
 .tempo { min-width: 16ch; text-align: right; cursor: default; }
 .cycle { min-width: 9ch; cursor: default; }
 .cycle::before { content: '\00b7'; margin-right: var(--sp-2); }
-.update-hint { position: absolute; left: 100%; margin-left: var(--sp-3); font-size: var(--fs-sm); font-weight: var(--fw-label); color: var(--j-soft); white-space: nowrap; }
 
 /* ---------- buttons ---------- */
 .btn {
@@ -336,7 +335,7 @@ button, input { font: inherit; color: inherit; }
 }
 @media (max-width: 900px) {
   .workspace { grid-template-columns: minmax(0, 1fr) 264px; }
-  .readout, .update-hint { display: none; }
+  .readout { display: none; }
   .titlebar-right { margin-right: 140px; }
 }
 

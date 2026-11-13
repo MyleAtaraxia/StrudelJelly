@@ -111,7 +111,6 @@ const playBtn = $('play');
 let loaded = false;
 let started = false;
 let evalError = null;
-let evalCode = '';
 let tempoTimer = null;
 
 const num = (n) => String(Math.round(n * 10) / 10);
@@ -123,7 +122,6 @@ function renderTransport() {
   playBtn.classList.toggle('is-playing', started);
   $('play-label').textContent = started ? 'Stop' : 'Play';
   playBtn.title = !loaded ? 'Loading sounds' : started ? 'Stop (Ctrl+.). Ctrl+Enter updates.' : 'Play (Ctrl+Enter)';
-  $('update-hint').hidden = !(started && editor && editor.code !== evalCode);
 }
 function renderTempo() {
   const cps = editor?.repl.scheduler.cps;
@@ -159,7 +157,6 @@ editor = createEditor({
   settings: { ...prefs, theme: isDark() ? 'jellyDark' : 'jellyLight' },
   onEvalError: showError,
   onEval: (code = editor.code) => {
-    evalCode = code;
     // tie notes to their code: colour bars per `$:` block (only while the text still matches what was evaluated)
     const src = viz?.setSource(code);
     if (src && editor.code === code) setPatternMarks(editor, src.labelled && src.blocks.length > 1 ? src.blocks : []);
@@ -198,7 +195,6 @@ $('viz-follow').addEventListener('click', () => viz.follow());
 viz.setVisible(prefs.visualStrip);
 renderTempo();
 renderTransport();
-onDocChange(editor, renderTransport);
 onDocChange(editor, () => { vstUi?.hide(); mixer?.onDocChange(); });
 onSelectionChange(editor, renderCursor);
 renderCursor();
@@ -346,7 +342,6 @@ const sketches = createSketches({
     if (started) editor.stop();
     showError(null);
     renderCursor();
-    evalCode = editor.code;
     if (loaded) refreshPattern();
     renderTransport();
     vstUi?.refresh();
