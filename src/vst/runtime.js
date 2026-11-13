@@ -475,14 +475,51 @@ function applyStreams(state) {
   setActiveStreams(mask);
 }
 
-// routes seen at play time that the evaluate-time query missed (patterns that change slowly)
+// routes the evaluate-time query missed (patterns that change slowly): a rolling lookahead queries the cycle
+// QUERY_CYCLES ahead as playback moves, so their copies load before the first note; addDynamic at play time is the
+// fallback (that note plays dry)
 let dynTimer = null;
+let curPattern = null;
+let horizon = 0;
+let lookTimer = null;
+function lookahead() {
+  if (!cur || !curPattern) return;
+  const now = Math.floor(getCycle() || 0);
+  if (now + QUERY_CYCLES <= horizon) return;
+  const from = Math.max(horizon, now);
+  horizon = now + QUERY_CYCLES;
+  let haps = [];
+  try {
+    haps = curPattern.queryArc(from, horizon);
+  } catch {}
+  if (haps.length > MAX_QUERY_HAPS) haps = haps.slice(0, MAX_QUERY_HAPS);
+  for (const hap of haps) {
+    const v = hap.value;
+    if (!v || typeof v !== 'object' || v._jset) continue;
+    let path;
+    try {
+      path = pathOf(cur, v, hap);
+    } catch {
+      continue; // wrong usage is reported when the hap plays
+    }
+    if (path.length && unprepared(path)) addDynamic(path);
+  }
+}
+
+// a route that still needs its copy, or (superdough sounds) its capture stream: an entry's default copy exists
+// from the evaluate on, but nothing streams into it until a pattern routes there
+const unprepared = (path) => {
+  const key = keyAt(path, 0);
+  return !cur.nodes.has(key) || (!cur.streams.has(key) && !cur.capped?.has(key) && cur.rack?.get(path[0])?.kind !== 'synth');
+};
+
 function addDynamic(path) {
   if (!cur) return null;
   addPath(cur, path, null);
   let stream = null;
   if (!cur.streams.has(keyAt(path, 0)) && !(typeof path[0] === 'string' && cur.rack?.get(path[0])?.kind === 'synth')) {
     if (cur.streams.size >= MAX_STREAMS - 1) {
+      (cur.capped ??= new Set()).add(keyAt(path, 0)); // reported once, then it plays dry
       reportError(new Error(`too many different effect routes for superdough sounds (at most ${MAX_STREAMS - 1})`));
     } else {
       cur.streams.set(keyAt(path, 0), (stream = cur.streams.size + 1));
@@ -523,6 +560,9 @@ export function editPattern(pattern) {
   ev = null;
   const state = analyse(pattern, getCycle(), declared);
   cur = state;
+  curPattern = pattern;
+  horizon = Math.max(0, Math.floor(getCycle() || 0)) + QUERY_CYCLES;
+  lookTimer ??= setInterval(lookahead, 250);
   applyStreams(state);
   const spec = specOf(state);
   remember(spec);
@@ -593,7 +633,7 @@ export function wrapOutput(output) {
       return;
     }
     const key = keyAt(path, 0);
-    if (!cur.nodes.has(key)) addDynamic(path);
+    if (unprepared(path)) addDynamic(path);
     if (synth) return sendMidi(key, v, duration, t);
     const { _jfx, ...rest } = v;
     const stream = curStreamOf.get(key) ?? cur.streams.get(key);
