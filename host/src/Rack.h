@@ -34,6 +34,8 @@ public:
   juce::String debugTouch(const juce::String& group, int slot, const juce::String& key, float normalized);
   juce::var debugCopies(const juce::String& group, int slot, const juce::String& key);
   void onRateChanged();
+  // _scope(): node keys to send waveforms of (key -> samples per snapshot); replaces the previous set
+  void setScopes(const juce::var& keys);
 
   // pipe reader thread: timed events (MIDI goes straight to the engine, parameter values via the message thread)
   void events(const juce::var& list);
@@ -44,6 +46,9 @@ private:
     juce::String key, next;
     std::vector<std::unique_ptr<Inst>> insts; // per slot
     std::atomic<float> peak[2] {};
+    std::vector<float> wave = std::vector<float>((size_t) PlanNode::kWave);
+    std::atomic<int> wavePos { 0 };
+    std::atomic<bool> tap { false };
   };
   struct Slot {
     juce::String name, path, uid;
@@ -87,6 +92,7 @@ private:
   int nextCopyId = 1;
   bool rebuildQueued = false;
   std::map<juce::String, float> convCache;
+  std::map<juce::String, int> scopes;
 
   // copy key -> id, for the pipe reader thread
   std::mutex keyLock;

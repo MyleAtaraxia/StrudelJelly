@@ -163,6 +163,7 @@ private:
     else if (cmd == "setAudio") { error = setAudio(msg); result = settings(); }
     else if (cmd == "setStreamLatency") { engine.setStreamLatencyMs(juce::jlimit(5.0, 500.0, (double) msg["ms"])); result = true; }
     else if (cmd == "applyRack") result = rack->apply(msg);
+    else if (cmd == "scope") { rack->setScopes(msg["keys"]); result = true; }
     else if (cmd == "getState") result = rack->getState(msg);
     else if (cmd == "paramValues") result = rack->paramValues(msg["group"].toString(), (int) msg["slot"]);
     else if (cmd == "params") result = rack->params(msg["group"].toString(), (int) msg["slot"]);

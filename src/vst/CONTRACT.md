@@ -47,6 +47,11 @@ restore(name: string): { name: string, plugins: string[] } | null  // the next e
 // meters, ~20 Hz: peak per entry copy summed per entry, 0..1 linear (rack entries only)
 onMeters(fn: (m: Record<string /* entry */, [number, number]>) => void): () => void
 
+// _scope() / _spectrum() on plugin audio (src/vst/scope.js): name the node keys to tap and how many samples each
+// snapshot holds; the host then sends the latest mono samples of each, ~20 Hz, as base64 16-bit little-endian
+_scopes(keys: Record<string /* node key */, number>): void
+onScope(fn: (s: { key: string, data: string }) => void): () => void
+
 // audio settings
 audioDevices(): { drivers: string[], devices: Record<string /* driver */, string[]> }
 audioSettings(): { driver: string, device: string, buffer: number }

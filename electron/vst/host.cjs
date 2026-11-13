@@ -149,6 +149,7 @@ class Host extends EventEmitter {
       this.setState({ cpu: m.cpu, sampleRate: m.sampleRate, blockSize: m.blockSize, latencyMs: Math.round(m.latencyMs * 10) / 10 });
     } else if (m.event === 'audio') this.emit('audio', m.settings);
     else if (m.event === 'param' || m.event === 'meters' || m.event === 'crashed') this.emit('event', m);
+    else if (m.event === 'scope') this.emit('scope', m);
   }
 
   request(cmd, args = {}) {
@@ -222,6 +223,15 @@ function setupVst({ app, ipcMain, getWin, sketchesDir }) {
   racks.on('rack', (r) => send('vst:rack', r));
   racks.on('param', (e) => send('vst:paramChange', e));
   racks.on('meters', (m) => send('vst:meters', m));
+  // _scope() on plugin audio: the renderer names the nodes it draws, the host streams their latest samples
+  let scopes = {};
+  const sendScopes = () => host.ready && host.request('scope', { keys: scopes }).catch(() => {});
+  host.on('ready', sendScopes);
+  host.on('scope', (m) => send('vst:scope', { key: m.key, data: m.data }));
+  ipcMain.on('vst:scopes', (_, keys) => {
+    scopes = keys && typeof keys === 'object' ? keys : {};
+    sendScopes();
+  });
 
   ipcMain.handle('vst:plugins', () => scanner.plugins());
   ipcMain.handle('vst:scanInfo', () => scanner.info());

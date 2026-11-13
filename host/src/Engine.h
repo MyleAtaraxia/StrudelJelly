@@ -61,6 +61,11 @@ struct PlanNode {
   bool synth = false;
   std::vector<PlanSlot> slots;
   std::atomic<float>* peak = nullptr; // [2], owned by the Copy
+  // waveform tap for _scope(), owned by the Copy: a mono ring the audio thread fills while tap is set
+  static constexpr int kWave = 1 << 14;
+  float* wave = nullptr;
+  std::atomic<int>* wavePos = nullptr;
+  std::atomic<bool>* tap = nullptr;
   juce::AudioBuffer<float> in;        // stereo, kMaxBlock
   juce::MidiBuffer midi;
   std::vector<ParamChange> changes;

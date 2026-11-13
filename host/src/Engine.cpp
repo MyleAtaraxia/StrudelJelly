@@ -165,6 +165,13 @@ void Engine::runNode(Plan& p, PlanNode& node, int n, float* const* out) {
     storeMax(node.peak[0], pl);
     storeMax(node.peak[1], pr);
   }
+  if (node.tap && node.tap->load(std::memory_order_relaxed)) {
+    const float* l = buf.getReadPointer(0);
+    const float* r = buf.getReadPointer(1);
+    int w = node.wavePos->load(std::memory_order_relaxed);
+    for (int i = 0; i < n; ++i, w = (w + 1) & (PlanNode::kWave - 1)) node.wave[w] = 0.5f * (l[i] + r[i]);
+    node.wavePos->store(w, std::memory_order_release);
+  }
   if (node.next >= 0) {
     auto& dst = p.nodes[(size_t) node.next].in;
     dst.addFrom(0, 0, buf, 0, 0, n);

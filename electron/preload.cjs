@@ -27,6 +27,8 @@ const vst = {
   deleted: () => ipcRenderer.invoke('vst:deleted'),
   restore: (name) => ipcRenderer.invoke('vst:restore', name),
   onMeters: on('vst:meters'),
+  onScope: on('vst:scope'), // { key, data: base64 16-bit samples }
+  _scopes: (keys) => ipcRenderer.send('vst:scopes', keys), // node key -> samples per snapshot
   audioDevices: () => ipcRenderer.invoke('vst:audioDevices'),
   audioSettings: () => ipcRenderer.invoke('vst:audioSettings'),
   setAudio: (s) => ipcRenderer.invoke('vst:setAudio', s),

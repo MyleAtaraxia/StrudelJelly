@@ -430,6 +430,9 @@ void Rack::rebuild() {
     pn.delay = plan->lmax - n.d;
     pn.synth = n.g->synth;
     pn.peak = n.c->peak;
+    pn.wave = n.c->wave.data();
+    pn.wavePos = &n.c->wavePos;
+    pn.tap = &n.c->tap;
     int pre = 0;
     for (size_t s = 0; s < n.c->insts.size(); ++s) {
       auto* i = n.c->insts[s].get();
@@ -646,6 +649,12 @@ void Rack::setParamFromEvent(const juce::String& group, int slot, const juce::St
   engine.push(out.data(), (int) out.size());
 }
 
+void Rack::setScopes(const juce::var& keys) {
+  scopes.clear();
+  if (auto* o = keys.getDynamicObject())
+    for (auto& p : o->getProperties()) scopes[p.name.toString()] = juce::jlimit(32, PlanNode::kWave, (int) p.value);
+}
+
 // ---------- timer: parameter notes, meters, crashes ----------
 void Rack::timerCallback() {
   std::vector<Note> batch;
@@ -723,6 +732,23 @@ void Rack::timerCallback() {
       }
   }
   if (any) pipe.send(obj({ { "event", "meters" }, { "m", mv } }));
+
+  // scopes: the latest samples of each tapped node, as 16-bit base64
+  for (auto& [id, g] : groups)
+    for (auto& c : g->copies) {
+      auto s = scopes.find(c->key);
+      const bool want = s != scopes.end();
+      const bool was = c->tap.exchange(want);
+      if (!want || !was) continue; // the ring fills from the next block on
+      const int n = s->second;
+      std::vector<int16_t> pcm((size_t) n);
+      const int end = c->wavePos.load(std::memory_order_acquire);
+      for (int i = 0; i < n; ++i) {
+        const float v = c->wave[(size_t) ((end - n + i) & (PlanNode::kWave - 1))];
+        pcm[(size_t) i] = (int16_t) std::lround(juce::jlimit(-1.0f, 1.0f, v) * 32767.0f);
+      }
+      pipe.send(obj({ { "event", "scope" }, { "key", c->key }, { "data", juce::Base64::toBase64(pcm.data(), pcm.size() * sizeof(int16_t)) } }));
+    }
 }
 
 } // namespace jelly

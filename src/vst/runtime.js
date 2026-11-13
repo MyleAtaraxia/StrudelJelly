@@ -19,6 +19,7 @@ import { Pattern, reify, stack, valueToMidi, evalScope } from '@strudel/core';
 import { getAudioContext } from '@strudel/webaudio';
 import { parse } from 'acorn';
 import { MAX_STREAMS, setActiveStreams } from './engine/capture.js';
+import { noteScope } from './scope.js';
 
 const api = window.jelly?.vst;
 const QUERY_CYCLES = 4;
@@ -634,9 +635,13 @@ export function wrapOutput(output) {
     }
     const key = keyAt(path, 0);
     if (unprepared(path)) addDynamic(path);
+    const stream = synth ? null : curStreamOf.get(key) ?? cur.streams.get(key);
+    // _scope() and friends: the sound is heard where the route leaves the plugins, so draw it from there
+    const scoped = v.analyze != null && path.length && (synth || stream);
+    if (scoped) noteScope(v.analyze, path.at(-1), v.fft);
     if (synth) return sendMidi(key, v, duration, t);
     const { _jfx, ...rest } = v;
-    const stream = curStreamOf.get(key) ?? cur.streams.get(key);
+    if (scoped) delete rest.analyze;
     if (path.length && stream) hap.value = { ...rest, orbit: 1000 * stream + (Number(rest.orbit) || 1) };
     else hap.value = rest;
     return output(hap, deadline, duration, cps, t);
